@@ -34,6 +34,17 @@ fn quick_boost(app: AppHandle) {
     });
 }
 
+/// Đặt mức dùng RAM của giao diện (WebView2). Lỗi (runtime WebView2 cũ…) bị bỏ qua.
+pub fn set_ui_memory_low(app: &AppHandle, low: bool) {
+    if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = w.with_webview(move |pw| {
+            if let Err(e) = crate::sys::webview::set_memory_low(&pw.controller(), low) {
+                eprintln!("không đặt được mức RAM WebView2: {e}");
+            }
+        });
+    }
+}
+
 /// Hiện cửa sổ chính; nếu đã bị đóng (ẩn xuống tray) thì tạo lại từ cấu hình.
 ///
 /// Đóng cửa sổ = huỷ hẳn WebView2 (các tiến trình msedgewebview2 thoát), nên khi

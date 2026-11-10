@@ -151,6 +151,12 @@ pub fn run() {
         })
         // Cửa sổ chính bị đóng (xuống tray): chờ WebView2 dọn xong rồi thu gọn bộ nhớ của app.
         .on_window_event(|window, event| {
+            // Cửa sổ mất focus (chuyển sang app khác, thu nhỏ) => giao diện nhả RAM; quay lại => bình thường.
+            if let WindowEvent::Focused(focused) = event {
+                if window.label() == tray::MAIN_WINDOW {
+                    tray::set_ui_memory_low(window.app_handle(), !focused);
+                }
+            }
             if matches!(event, WindowEvent::Destroyed) && window.label() == tray::MAIN_WINDOW {
                 let app = window.app_handle().clone();
                 let _ = std::thread::Builder::new().name("trim-self".into()).spawn(move || {

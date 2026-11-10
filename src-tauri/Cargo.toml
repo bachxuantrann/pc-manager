@@ -23,6 +23,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 windows-registry = "0.5"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 rayon = "1"
+# WebView2: hạ mức dùng RAM của giao diện khi cửa sổ không được dùng (MemoryUsageTargetLevel).
+# Cùng phiên bản Tauri đang dùng; windows-core 0.62 là bản webview2-com cần (đặt tên khác để không lẫn 0.61).
+webview2-com = "0.39"
+windows-core-062 = { package = "windows-core", version = "0.62" }
 jwalk = "0.8"
 blake3 = "1"
 

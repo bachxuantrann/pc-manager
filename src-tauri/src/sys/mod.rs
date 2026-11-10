@@ -14,6 +14,7 @@ pub mod service;
 pub mod shell;
 pub mod signature;
 pub mod tasks;
+pub mod webview;
 pub mod token;
 
 pub use handle::OwnedHandle;

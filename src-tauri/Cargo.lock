@@ -2323,7 +2323,9 @@ dependencies = [
  "tauri-build",
  "thiserror 2.0.21",
  "toml 0.8.2",
+ "webview2-com",
  "windows 0.61.3",
+ "windows-core 0.62.2",
  "windows-registry",
 ]
 
