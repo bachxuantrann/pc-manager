@@ -84,6 +84,9 @@ pub fn run() {
             commands::process::process_open_location,
             commands::startup::startup_list,
             commands::startup::startup_set_enabled,
+            commands::cleaner::cleaner_scan,
+            commands::cleaner::cleaner_clean,
+            commands::cleaner::cleaner_cancel,
         ])
         .build(tauri::generate_context!());
 

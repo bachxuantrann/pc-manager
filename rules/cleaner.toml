@@ -1,3 +1,217 @@
-# Rule dọn rác — nhúng vào binary bằng include_str!. Engine làm ở giai đoạn 4.
-# Cleaner CHỈ xoá path khớp rule ở đây (xem mục AN TOÀN trong CLAUDE.md).
+# Rule dọn rác — nhúng vào binary bằng include_str!, không đọc từ đĩa lúc chạy.
+#
+# Cleaner CHỈ xoá file khớp rule ở đây (CLAUDE.md, mục AN TOÀN). Ngoài ra,
+# bất kể rule nói gì, engine luôn:
+#   - chặn danh sách cấm cứng (System32, SysWOW64, WinSxS, Prefetch, gốc
+#     %USERPROFILE%, Documents/Desktop/Pictures…, mọi ổ gốc X:\);
+#   - không đi theo symlink/junction/reparse point (kể cả file OneDrive chỉ ở đám mây);
+#   - bỏ qua file mới hơn min_age_hours, file đang bị khoá, file đổi từ lúc quét;
+#   - chỉ xoá nội dung bên trong thư mục gốc của rule, không xoá chính thư mục gốc.
+#
+# Trường:
+#   id, name, group, description  : hiển thị
+#   risk                          : "low" | "medium" | "high"
+#   kind                          : "files" (mặc định) | "recycle_bin"
+#   paths                         : thư mục gốc; hỗ trợ %BIẾN% và * trong một
+#                                   đoạn đường dẫn (vd profile trình duyệt)
+#   include / exclude             : mẫu tên file (* và ?), không phân biệt hoa thường
+#   recursive                     : quét thư mục con (mặc định true)
+#   min_age_hours                 : tuổi tối thiểu tính theo max(ngày tạo, ngày sửa)
+#   remove_empty_dirs             : xoá thư mục con rỗng sau khi dọn
+#   requires_admin                : cần quyền Administrator
+#   skip_if_running               : bỏ qua khi tiến trình này đang chạy
+#   service                       : dừng service trước khi dọn, chạy lại sau đó
+#   default_selected              : được chọn sẵn trong bản xem trước
+
 version = 1
+
+# ---------------------------------------------------------------- Hệ thống
+
+[[rule]]
+id = "user-temp"
+name = "File tạm của bạn"
+group = "Hệ thống"
+description = "Thư mục %TEMP%. Ứng dụng tạo file ở đây khi cài đặt, giải nén, cập nhật rồi thường quên xoá."
+risk = "low"
+paths = ["%LOCALAPPDATA%\\Temp"]
+min_age_hours = 24
+remove_empty_dirs = true
+
+[[rule]]
+id = "windows-temp"
+name = "File tạm của Windows"
+group = "Hệ thống"
+description = "Thư mục C:\\Windows\\Temp, dùng bởi trình cài đặt và dịch vụ hệ thống."
+risk = "low"
+paths = ["%SystemRoot%\\Temp"]
+min_age_hours = 24
+remove_empty_dirs = true
+requires_admin = true
+
+[[rule]]
+id = "thumbnail-cache"
+name = "Cache ảnh thu nhỏ"
+group = "Hệ thống"
+description = "Ảnh thu nhỏ Explorer lưu sẵn. Windows tự tạo lại khi bạn mở thư mục; file đang dùng sẽ được bỏ qua."
+risk = "low"
+paths = ["%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer"]
+include = ["thumbcache_*.db"]
+recursive = false
+min_age_hours = 0
+
+[[rule]]
+id = "directx-shader-cache"
+name = "Cache shader DirectX"
+group = "Hệ thống"
+description = "Shader game/ứng dụng đã biên dịch. Tự tạo lại khi cần (lần mở game đầu có thể giật nhẹ)."
+risk = "low"
+paths = ["%LOCALAPPDATA%\\D3DSCache"]
+min_age_hours = 24
+remove_empty_dirs = true
+
+[[rule]]
+id = "crash-dumps"
+name = "Bản ghi lỗi ứng dụng (crash dump)"
+group = "Báo cáo lỗi"
+description = "File .dmp được tạo khi ứng dụng bị treo/văng. Chỉ cần khi gửi cho nhà phát triển."
+risk = "low"
+paths = ["%LOCALAPPDATA%\\CrashDumps"]
+include = ["*.dmp"]
+min_age_hours = 24
+
+[[rule]]
+id = "system-minidump"
+name = "Minidump màn hình xanh"
+group = "Báo cáo lỗi"
+description = "Bản ghi các lần màn hình xanh (BSOD). Giữ lại nếu bạn đang điều tra lỗi phần cứng/driver."
+risk = "medium"
+paths = ["%SystemRoot%\\Minidump"]
+include = ["*.dmp"]
+min_age_hours = 168
+requires_admin = true
+default_selected = false
+
+[[rule]]
+id = "memory-dump"
+name = "Bản ghi bộ nhớ đầy đủ (MEMORY.DMP)"
+group = "Báo cáo lỗi"
+description = "Toàn bộ RAM lúc màn hình xanh, thường vài GB. Giữ lại nếu bạn đang điều tra lỗi."
+risk = "medium"
+paths = ["%SystemRoot%"]
+include = ["MEMORY.DMP"]
+recursive = false
+min_age_hours = 168
+requires_admin = true
+default_selected = false
+
+[[rule]]
+id = "wer-user"
+name = "Báo cáo lỗi Windows (của bạn)"
+group = "Báo cáo lỗi"
+description = "Báo cáo Windows Error Reporting đã gửi hoặc đang chờ gửi."
+risk = "low"
+paths = ["%LOCALAPPDATA%\\Microsoft\\Windows\\WER"]
+min_age_hours = 24
+remove_empty_dirs = true
+
+[[rule]]
+id = "wer-system"
+name = "Báo cáo lỗi Windows (hệ thống)"
+group = "Báo cáo lỗi"
+description = "Báo cáo lỗi của dịch vụ và ứng dụng chạy cho mọi người dùng."
+risk = "low"
+paths = ["%ProgramData%\\Microsoft\\Windows\\WER\\ReportArchive", "%ProgramData%\\Microsoft\\Windows\\WER\\ReportQueue"]
+min_age_hours = 24
+remove_empty_dirs = true
+requires_admin = true
+
+[[rule]]
+id = "windows-logs"
+name = "Nhật ký Windows cũ"
+group = "Báo cáo lỗi"
+description = "File .log/.cab cũ hơn 7 ngày trong C:\\Windows\\Logs. Nhật ký đang ghi sẽ được bỏ qua."
+risk = "medium"
+paths = ["%SystemRoot%\\Logs"]
+include = ["*.log", "*.cab", "*.old"]
+min_age_hours = 168
+requires_admin = true
+
+# ---------------------------------------------------------------- Trình duyệt
+
+[[rule]]
+id = "chrome-cache"
+name = "Cache Google Chrome"
+group = "Trình duyệt"
+description = "Ảnh, script đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie hay phiên đăng nhập."
+risk = "low"
+paths = [
+  "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Cache",
+  "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Code Cache",
+  "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\GPUCache",
+]
+min_age_hours = 0
+remove_empty_dirs = true
+skip_if_running = ["chrome.exe"]
+
+[[rule]]
+id = "edge-cache"
+name = "Cache Microsoft Edge"
+group = "Trình duyệt"
+description = "Ảnh, script đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie hay phiên đăng nhập."
+risk = "low"
+paths = [
+  "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Cache",
+  "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Code Cache",
+  "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\GPUCache",
+]
+min_age_hours = 0
+remove_empty_dirs = true
+skip_if_running = ["msedge.exe"]
+
+[[rule]]
+id = "firefox-cache"
+name = "Cache Firefox"
+group = "Trình duyệt"
+description = "Ảnh, script đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie hay phiên đăng nhập."
+risk = "low"
+paths = ["%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache2"]
+min_age_hours = 0
+remove_empty_dirs = true
+skip_if_running = ["firefox.exe"]
+
+# ---------------------------------------------------------------- Windows Update
+
+[[rule]]
+id = "windows-update-cache"
+name = "Bản cập nhật Windows đã tải"
+group = "Windows Update"
+description = "File cập nhật đã cài xong. Dịch vụ Windows Update được tạm dừng trong lúc dọn rồi chạy lại."
+risk = "medium"
+paths = ["%SystemRoot%\\SoftwareDistribution\\Download"]
+min_age_hours = 24
+remove_empty_dirs = true
+requires_admin = true
+service = "wuauserv"
+
+[[rule]]
+id = "delivery-optimization"
+name = "Cache Delivery Optimization"
+group = "Windows Update"
+description = "Bản cập nhật Windows lưu để chia sẻ cho máy khác trong mạng."
+risk = "low"
+paths = ["%SystemRoot%\\ServiceProfiles\\NetworkService\\AppData\\Local\\Microsoft\\Windows\\DeliveryOptimization\\Cache"]
+min_age_hours = 0
+remove_empty_dirs = true
+requires_admin = true
+service = "DoSvc"
+
+# ---------------------------------------------------------------- Thùng rác
+
+[[rule]]
+id = "recycle-bin"
+name = "Thùng rác"
+group = "Thùng rác"
+description = "File bạn đã xoá vào Thùng rác trên mọi ổ đĩa. Sau khi dọn sẽ KHÔNG khôi phục được."
+risk = "high"
+kind = "recycle_bin"
+default_selected = false

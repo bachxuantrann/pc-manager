@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use crate::cleaner::CleanerManager;
 use crate::memory::MemoryManager;
 use crate::process::ProcessManager;
 use crate::store::Store;
@@ -10,6 +11,7 @@ pub struct AppState {
     pub store: Store,
     pub memory: MemoryManager,
     pub process: ProcessManager,
+    pub cleaner: CleanerManager,
 }
 
 impl AppState {
@@ -36,6 +38,11 @@ impl AppState {
                 std::process::exit(1);
             }
         };
-        Self { store, memory: MemoryManager::init(), process: ProcessManager::default() }
+        Self {
+            store,
+            memory: MemoryManager::init(),
+            process: ProcessManager::default(),
+            cleaner: CleanerManager::from_system(),
+        }
     }
 }

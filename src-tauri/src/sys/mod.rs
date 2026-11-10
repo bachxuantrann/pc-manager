@@ -7,6 +7,8 @@ pub mod handle;
 pub mod memory;
 mod ntdll;
 pub mod process;
+pub mod recycle;
+pub mod service;
 pub mod shell;
 pub mod signature;
 pub mod tasks;

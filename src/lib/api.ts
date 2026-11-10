@@ -1,5 +1,5 @@
 // Mọi lời gọi invoke() tới backend Rust được gom tại đây, có type.
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /** Lỗi backend trả về (khớp với `AppError` bên Rust). */
@@ -154,6 +154,79 @@ export interface StartupEntry {
   note: string | null;
 }
 
+// ---- Cleaner --------------------------------------------------------------
+
+export type Risk = "low" | "medium" | "high";
+
+export type RuleStatus =
+  | { kind: "ready" }
+  | { kind: "empty" }
+  | { kind: "needsAdmin" }
+  | { kind: "blocked"; reason: string }
+  | { kind: "error"; message: string };
+
+export interface RuleScan {
+  id: string;
+  name: string;
+  group: string;
+  description: string;
+  risk: Risk;
+  status: RuleStatus;
+  bytes: number;
+  files: number;
+  skippedYoung: number;
+  skippedLinks: number;
+  defaultSelected: boolean;
+  usesService: boolean;
+}
+
+export interface ScanResult {
+  scanId: number;
+  rules: RuleScan[];
+  totalBytes: number;
+  durationMs: number;
+  cancelled: boolean;
+}
+
+export interface CleanerProgress {
+  phase: "scan" | "clean";
+  doneRules: number;
+  totalRules: number;
+  current: string;
+  files: number;
+  bytes: number;
+}
+
+export interface RuleClean {
+  id: string;
+  name: string;
+  deletedFiles: number;
+  freedBytes: number;
+  skippedLocked: number;
+  skippedChanged: number;
+  errors: number;
+  firstError: string | null;
+  message: string | null;
+}
+
+export interface CleanReport {
+  dryRun: boolean;
+  rules: RuleClean[];
+  freedBytes: number;
+  deletedFiles: number;
+  skippedLocked: number;
+  skippedChanged: number;
+  errors: number;
+  durationMs: number;
+  cancelled: boolean;
+}
+
+function channel<T>(cb: (v: T) => void): Channel<T> {
+  const ch = new Channel<T>();
+  ch.onmessage = cb;
+  return ch;
+}
+
 export interface ActionLogEntry {
   ts: number;
   action: string;
@@ -185,6 +258,13 @@ export const api = {
   startupList: () => invoke<StartupEntry[]>("startup_list"),
   startupSetEnabled: (e: StartupEntry, enabled: boolean) =>
     invoke<void>("startup_set_enabled", { source: e.source, name: e.keyName, enabled }),
+
+  cleanerScan: (onProgress: (p: CleanerProgress) => void) =>
+    invoke<ScanResult>("cleaner_scan", { onProgress: channel(onProgress) }),
+  /** Chỉ gửi id rule — backend tự xoá đúng các file nó đã quét. */
+  cleanerClean: (scanId: number, ruleIds: string[], dryRun: boolean, onProgress: (p: CleanerProgress) => void) =>
+    invoke<CleanReport>("cleaner_clean", { scanId, ruleIds, dryRun, onProgress: channel(onProgress) }),
+  cleanerCancel: () => invoke<void>("cleaner_cancel"),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

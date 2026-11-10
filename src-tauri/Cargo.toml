@@ -21,6 +21,8 @@ anyhow = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # Wrapper registry an toàn của dự án windows-rs (cùng windows-core 0.61).
 windows-registry = "0.5"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+rayon = "1"
 
 [dependencies.windows]
 version = "0.61"
@@ -40,6 +42,7 @@ features = [
   "Win32_System_TaskScheduler",
   "Win32_UI_Shell",
   "Win32_Storage_FileSystem",
+  "Win32_System_Services",
 ]
 
 [profile.release]
