@@ -129,7 +129,8 @@ impl AutoClean {
 // ---- Khởi động cùng Windows (Task Scheduler) -------------------------------------------
 
 /// Tên task. App cần quyền admin nên Run key sẽ bị UAC chặn — dùng task "Run with highest privileges".
-const TASK_NAME: &str = "PC Manager (khởi động cùng Windows)";
+/// Không dấu: trình gỡ NSIS (windows/hooks.nsh) xoá task theo đúng tên này.
+pub const TASK_NAME: &str = "PC Manager Autostart";
 /// Tham số dòng lệnh: khởi động ẩn xuống tray.
 pub const TRAY_ARG: &str = "--tray";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

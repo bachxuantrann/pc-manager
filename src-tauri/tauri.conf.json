@@ -38,7 +38,7 @@
     ],
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" },
-      "nsis": { "installMode": "perMachine" }
+      "nsis": { "installMode": "perMachine", "installerHooks": "./windows/hooks.nsh" }
     }
   }
 }
