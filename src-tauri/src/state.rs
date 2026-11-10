@@ -6,12 +6,14 @@ use crate::cleaner::CleanerManager;
 use crate::memory::MemoryManager;
 use crate::process::ProcessManager;
 use crate::store::Store;
+use crate::usage::leftovers::LeftoverManager;
 
 pub struct AppState {
     pub store: Store,
     pub memory: MemoryManager,
     pub process: ProcessManager,
     pub cleaner: CleanerManager,
+    pub leftovers: LeftoverManager,
 }
 
 impl AppState {
@@ -43,6 +45,10 @@ impl AppState {
             memory: MemoryManager::init(),
             process: ProcessManager::default(),
             cleaner: CleanerManager::from_system(),
+            // Bản sao lưu .reg trước khi xoá key Uninstall.
+            leftovers: LeftoverManager::new(
+                data_dir.map_or_else(|| std::env::temp_dir().join("pc-manager"), Path::to_path_buf).join("backups"),
+            ),
         }
     }
 }

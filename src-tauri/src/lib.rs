@@ -110,6 +110,8 @@ pub fn run() {
             commands::cleaner::cleaner_cancel,
             commands::apps::apps_list,
             commands::apps::apps_uninstall,
+            commands::apps::apps_leftovers_scan,
+            commands::apps::apps_leftovers_clean,
         ])
         .build(tauri::generate_context!());
 

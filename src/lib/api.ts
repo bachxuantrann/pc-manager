@@ -247,6 +247,36 @@ export interface AppsOverview {
   trackingSinceMs: number | null;
 }
 
+export type LeftoverKind = "installDir" | "dataDir" | "shortcut" | "registry";
+
+export interface Leftover {
+  id: number;
+  kind: LeftoverKind;
+  path: string;
+  bytes: number | null;
+  /** strong: chắc chắn thuộc app (mặc định chọn). possible: khớp tên gần đúng (mặc định không chọn). */
+  confidence: "strong" | "possible";
+  reason: string;
+  /** Lý do không thể dọn — hiện nhưng không cho chọn. */
+  blocked: string | null;
+}
+
+export interface LeftoverScan {
+  scanId: number;
+  appName: string;
+  uninstallerExists: boolean;
+  items: Leftover[];
+}
+
+export interface LeftoverReport {
+  recycled: number;
+  recycledBytes: number;
+  registryRemoved: boolean;
+  backup: string | null;
+  failed: number;
+  items: { id: number; ok: boolean; message: string | null }[];
+}
+
 function channel<T>(cb: (v: T) => void): Channel<T> {
   const ch = new Channel<T>();
   ch.onmessage = cb;
@@ -295,6 +325,11 @@ export const api = {
   appsList: () => invoke<AppsOverview>("apps_list"),
   /** Mở trình gỡ cài đặt của app; trả về tên app. */
   appsUninstall: (id: string) => invoke<string>("apps_uninstall", { id }),
+  /** Backend tự tìm phần còn sót và giữ kết quả. */
+  appsLeftoversScan: (id: string) => invoke<LeftoverScan>("apps_leftovers_scan", { id }),
+  /** Chỉ gửi scanId + id mục — file vào Thùng rác, key registry được sao lưu .reg trước. */
+  appsLeftoversClean: (scanId: number, itemIds: number[]) =>
+    invoke<LeftoverReport>("apps_leftovers_clean", { scanId, itemIds }),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

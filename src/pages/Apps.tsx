@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
+import LeftoverDialog from "../components/LeftoverDialog";
 import PageShell from "../components/PageShell";
 import { api, errorMessage, type AppsOverview, type InstalledApp, type UsageSource } from "../lib/api";
 import { daysAgo, formatBytes, formatDate, relativeDays } from "../lib/format";
@@ -50,6 +51,7 @@ export default function Apps() {
   const [sort, setSort] = useState<SortKey>("size");
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [leftoverApp, setLeftoverApp] = useState<InstalledApp | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -108,7 +110,7 @@ export default function Apps() {
         setMsg(null);
         try {
           const name = await api.appsUninstall(a.id);
-          setMsg({ tone: "ok", text: `Đã mở trình gỡ cài đặt của ${name}. Gỡ xong, bấm "Tải lại" để cập nhật danh sách.` });
+          setMsg({ tone: "ok", text: `Đã mở trình gỡ cài đặt của ${name}. Gỡ xong, bấm "Tải lại" để cập nhật danh sách. Nếu trình gỡ báo lỗi hoặc còn sót file, dùng "Dọn sót".` });
         } catch (e) {
           setMsg({ tone: "error", text: `${a.name}: ${errorMessage(e)}` });
         } finally {
@@ -202,7 +204,7 @@ export default function Apps() {
                   <th className="w-28 px-3 py-2 text-right font-medium opacity-70">Dung lượng</th>
                   <th className="w-28 px-3 py-2 font-medium opacity-70">Ngày cài</th>
                   <th className="w-36 px-3 py-2 font-medium opacity-70">Lần dùng cuối</th>
-                  <th className="w-36 px-3 py-2" />
+                  <th className="w-52 px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +221,16 @@ export default function Apps() {
                     <td className="px-3">
                       <LastUsed a={a} />
                     </td>
-                    <td className="px-3 text-right">
+                    <td className="whitespace-nowrap px-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busyId !== null}
+                        title="Tìm thư mục, shortcut, registry còn sót của app — chuyển vào Thùng rác"
+                        onClick={() => setLeftoverApp(a)}
+                      >
+                        Dọn sót
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -248,6 +259,13 @@ export default function Apps() {
       )}
 
       <ConfirmDialog req={confirm} onClose={() => setConfirm(null)} />
+      <LeftoverDialog
+        app={leftoverApp}
+        onClose={(changed) => {
+          setLeftoverApp(null);
+          if (changed) load();
+        }}
+      />
     </PageShell>
   );
 }

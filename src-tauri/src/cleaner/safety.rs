@@ -113,7 +113,7 @@ pub struct BanList {
     exact: Vec<(String, &'static str)>,
 }
 
-fn norm(s: &str) -> String {
+pub fn norm(s: &str) -> String {
     let s = s.replace('/', "\\");
     let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
     s.trim_end_matches('\\').to_lowercase()

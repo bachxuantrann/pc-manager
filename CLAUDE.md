@@ -38,7 +38,9 @@ pc-manager/
 - Viết unit test cho logic thuần (parse rule, glob, tính tuổi file, decode UserAssist ROT13).
 
 ## AN TOÀN — bắt buộc, không được nới lỏng
-1. Cleaner **chỉ xoá path khớp rule trong `rules/cleaner.toml`**. Không có command nào nhận path tùy ý từ UI để xoá (ngoại lệ: tính năng "file lớn/trùng lặp" — bắt buộc gửi vào Recycle Bin qua `IFileOperation`/`SHFileOperationW` với `FOF_ALLOWUNDO`, không xoá vĩnh viễn).
+1. Cleaner **chỉ xoá path khớp rule trong `rules/cleaner.toml`**. Không có command nào nhận path tùy ý từ UI để xoá. Ngoại lệ (bắt buộc gửi vào Recycle Bin qua `IFileOperation`/`SHFileOperationW` với `FOF_ALLOWUNDO`, không xoá vĩnh viễn):
+   - tính năng "file lớn/trùng lặp";
+   - "Dọn phần còn sót" sau khi gỡ app: backend tự tìm (InstallLocation, thư mục AppData/LocalAppData/ProgramData/Program Files trùng tên app, shortcut Start Menu trỏ vào thư mục cài, key `Uninstall`), lưu kết quả quét phía Rust; UI chỉ gửi `scanId` + id mục đã chọn. Mục "có thể" (khớp heuristic) mặc định không tick. Không bao giờ chọn thư mục là tổ tiên/chứa thư mục cài của app khác, thư mục dùng chung (Microsoft, Common Files, Packages…), hay thư mục đang có tiến trình chạy. Key registry phải export `.reg` backup trước khi xoá.
 2. Luôn **Scan → Preview → người dùng xác nhận → Delete**. Có chế độ dry-run.
 3. Không follow symlink/junction/reparse point. Bỏ qua file đang bị lock, bỏ qua file mới hơn `min_age_hours`.
 4. Danh sách cấm cứng (không bao giờ xoá dù rule nói gì): `C:\Windows\System32`, `SysWOW64`, `WinSxS` (chỉ dọn qua `DISM /StartComponentCleanup`), `Prefetch`, `%USERPROFILE%` gốc, Documents/Desktop/Pictures, mọi ổ gốc `X:\`.

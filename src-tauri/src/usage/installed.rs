@@ -105,6 +105,18 @@ pub fn list() -> Vec<Installed> {
     out
 }
 
+/// Vị trí key Uninstall của app `id`: (gốc, đường dẫn con dưới gốc, tên đầy đủ cho reg.exe).
+pub fn registry_location(id: &str) -> Option<(&'static Key, String, String)> {
+    let (tag, sub) = id.split_once('\\')?;
+    if sub.is_empty() || sub.contains('\\') {
+        return None;
+    }
+    let (root, base, tag) = sources().into_iter().find(|(_, _, t)| *t == tag)?;
+    let hive = if tag == "HKCU" { "HKCU" } else { "HKLM" };
+    let path = format!(r"{base}\{sub}");
+    Some((root, path.clone(), format!(r"{hive}\{path}")))
+}
+
 /// Tìm lại một app theo id (đọc trực tiếp registry, không tin dữ liệu từ UI).
 pub fn find(id: &str) -> Option<Installed> {
     let (tag, sub) = id.split_once('\\')?;
@@ -148,5 +160,9 @@ mod tests {
         }
         assert!(find(r"HKLM\..\..\Run").is_none());
         assert!(find(r"HKXX\abc").is_none());
+        let (_, p, full) = registry_location(r"HKLM32\Foo").unwrap();
+        assert_eq!(p, format!(r"{UNINSTALL32}\Foo"));
+        assert_eq!(full, format!(r"HKLM\{UNINSTALL32}\Foo"));
+        assert!(registry_location(r"HKCU\a\b").is_none());
     }
 }

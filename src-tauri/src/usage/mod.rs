@@ -4,6 +4,7 @@
 //! CLAUDE.md. Mỗi nguồn đều có điểm mù nên UI luôn cho biết số liệu lấy từ đâu.
 
 pub mod installed;
+pub mod leftovers;
 pub mod prefetch;
 pub mod sampler;
 pub mod userassist;
