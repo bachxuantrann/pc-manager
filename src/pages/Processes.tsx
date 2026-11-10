@@ -36,11 +36,11 @@ function PublisherCell({ p }: { p: Publisher }) {
 }
 
 const COLUMNS: { key: SortKey; label: string; cls: string }[] = [
-  { key: "name", label: "Tên", cls: "text-left" },
+  { key: "name", label: "Tên", cls: "w-[28%] text-left" },
   { key: "pid", label: "PID", cls: "w-20 text-right" },
   { key: "cpu", label: "CPU", cls: "w-20 text-right" },
   { key: "memory", label: "RAM", cls: "w-24 text-right" },
-  { key: "publisher", label: "Publisher", cls: "w-48 text-left" },
+  { key: "publisher", label: "Publisher", cls: "w-48 text-left xl:w-64" },
   { key: "path", label: "Đường dẫn", cls: "text-left" },
 ];
 
@@ -237,7 +237,7 @@ export default function Processes() {
   const locked = !!p?.protectedReason;
 
   return (
-    <section className="mx-auto flex h-full max-w-6xl flex-col">
+    <section className="flex h-full w-full flex-col">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Tiến trình</h1>
@@ -255,7 +255,7 @@ export default function Processes() {
             placeholder="Tìm tên, PID, đường dẫn, publisher…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-72 rounded-md border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+            className="w-72 rounded-md border xl:w-96 border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
           />
         </div>
       </div>

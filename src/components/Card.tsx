@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 export function Card({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg bg-white p-4 shadow-sm dark:bg-white/5 ${className}`}>
-      {title && <h2 className="mb-3 text-sm font-medium opacity-70">{title}</h2>}
+    <div className={`rounded-lg bg-white p-4 shadow-sm dark:bg-white/5 2xl:p-6 ${className}`}>
+      {title && <h2 className="mb-3 text-sm font-medium opacity-70 2xl:text-base">{title}</h2>}
       {children}
     </div>
   );
@@ -12,8 +12,8 @@ export function Card({ title, children, className = "" }: { title?: string; chil
 export function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div title={hint}>
-      <div className="text-xs opacity-60">{label}</div>
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
+      <div className="text-xs opacity-60 2xl:text-sm">{label}</div>
+      <div className="text-lg font-semibold tabular-nums xl:text-xl 2xl:text-2xl">{value}</div>
     </div>
   );
 }

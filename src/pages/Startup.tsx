@@ -140,7 +140,7 @@ export default function Startup() {
   const enabledApps = appEntries.filter((e) => e.enabled).length;
 
   return (
-    <section className="mx-auto flex h-full max-w-6xl flex-col">
+    <section className="flex h-full w-full flex-col">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Khởi động</h1>
@@ -155,7 +155,7 @@ export default function Startup() {
           placeholder="Tìm tên, lệnh, publisher…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-72 rounded-md border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+          className="w-72 rounded-md border xl:w-96 border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
         />
       </div>
 

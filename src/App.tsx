@@ -26,7 +26,7 @@ export default function App() {
     <MemoryFeedProvider>
       <div className="flex h-full">
         <Sidebar current={page} onSelect={setPage} />
-        <main className="flex-1 overflow-auto p-6">
+        <main className="min-w-0 flex-1 overflow-auto p-6 2xl:px-10 2xl:py-8">
           <Page />
         </main>
       </div>

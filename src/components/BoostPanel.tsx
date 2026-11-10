@@ -77,7 +77,7 @@ function BoostCard({
     // Mô tả có chiều cao tối thiểu cố định để nút của 3 thẻ luôn thẳng hàng và
     // KHÔNG bị đẩy xuống khi thẻ bên cạnh hiện kết quả.
     <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <div className="lg:min-h-[6.5rem]">
+      <div className="lg:min-h-[6.5rem] 2xl:min-h-[4.5rem]">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">{title}</h3>
           {badge}

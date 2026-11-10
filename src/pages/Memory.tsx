@@ -102,7 +102,7 @@ export default function Memory() {
             <Composition s={s} />
           </Card>
           <Card>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 2xl:grid-cols-8">
               <Stat label="Tổng RAM" value={formatBytes(s.total)} />
               <Stat label="Đang dùng" value={formatBytes(s.used)} />
               <Stat label="Còn trống (available)" value={formatBytes(s.available)} hint="Free + Standby — Windows có thể cấp ngay" />
@@ -114,7 +114,7 @@ export default function Memory() {
             </div>
           </Card>
           <Card title="% RAM đang dùng — 60 giây gần nhất">
-            <UsageChart samples={history} height={180} />
+            <UsageChart samples={history} minHeight={200} />
           </Card>
           <Card title="Boost">
             <BoostPanel />
