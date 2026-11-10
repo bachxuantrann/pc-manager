@@ -68,9 +68,9 @@ impl Drop for Sd {
 }
 
 /// Báo bản đang chạy hiện cửa sổ.
-fn notify_existing() {
-    // SAFETY: tên là hằng NUL-terminated.
-    if let Ok(raw) = unsafe { OpenEventW(EVENT_MODIFY_STATE, false, EVENT_NAME) } {
+fn notify_existing(event_name: PCWSTR) {
+    // SAFETY: `event_name` NUL-terminated, sống tới hết lời gọi (bảo đảm bởi người gọi).
+    if let Ok(raw) = unsafe { OpenEventW(EVENT_MODIFY_STATE, false, event_name) } {
         // SAFETY: handle mới mở, ta sở hữu duy nhất.
         if let Some(h) = unsafe { OwnedHandle::from_raw(raw) } {
             // SAFETY: `h` là event hợp lệ có quyền EVENT_MODIFY_STATE.
@@ -81,10 +81,16 @@ fn notify_existing() {
 
 /// Giành quyền "bản duy nhất". `notify`: nếu đã có bản khác thì yêu cầu nó hiện cửa sổ.
 pub fn acquire(notify: bool) -> windows::core::Result<Acquire> {
+    acquire_named(MUTEX_NAME, EVENT_NAME, notify)
+}
+
+/// Như `acquire` nhưng với tên tuỳ ý (test dùng tên riêng để không đụng bản app đang chạy).
+/// Hai tên phải là chuỗi NUL-terminated sống suốt lời gọi.
+fn acquire_named(mutex_name: PCWSTR, event_name: PCWSTR, notify: bool) -> windows::core::Result<Acquire> {
     let sd = Sd::new()?;
     let sa = sd.attributes();
     // SAFETY: `sa` và descriptor bên trong sống tới hết lời gọi; tên NUL-terminated.
-    let created = unsafe { CreateMutexW(Some(&sa), false, MUTEX_NAME) };
+    let created = unsafe { CreateMutexW(Some(&sa), false, mutex_name) };
     // Đọc ngay sau lời gọi: ERROR_ALREADY_EXISTS khi mutex đã có (vẫn trả handle).
     // SAFETY: không tiền điều kiện.
     let last = unsafe { GetLastError() };
@@ -97,12 +103,12 @@ pub fn acquire(notify: bool) -> windows::core::Result<Acquire> {
     };
     if mutex.is_none() || last == ERROR_ALREADY_EXISTS {
         if notify {
-            notify_existing();
+            notify_existing(event_name);
         }
         return Ok(Acquire::AlreadyRunning);
     }
     // SAFETY: như trên. Auto-reset, ban đầu chưa bật.
-    let raw = unsafe { CreateEventW(Some(&sa), false, false, EVENT_NAME)? };
+    let raw = unsafe { CreateEventW(Some(&sa), false, false, event_name)? };
     // SAFETY: handle mới tạo, ta sở hữu duy nhất.
     let show = unsafe { OwnedHandle::from_raw(raw) }.ok_or_else(windows::core::Error::from_win32)?;
     let Some(mutex) = mutex else { return Ok(Acquire::AlreadyRunning) };
@@ -123,14 +129,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn second_acquire_sees_first() {
-        let first = acquire(false).unwrap();
-        println!("lần 1: {first:?}");
-        assert!(matches!(first, Acquire::First(_)), "lần 1 phải là bản đầu: {first:?}");
-        let second = acquire(false).unwrap();
-        assert!(matches!(second, Acquire::AlreadyRunning));
+    fn second_acquire_sees_first_and_can_signal() {
+        // Tên riêng theo PID: không đụng khoá của bản PC Manager thật đang chạy.
+        let pid = std::process::id();
+        let m = windows::core::HSTRING::from(format!("Local\\PcManager.Test.{pid}.Mutex"));
+        let e = windows::core::HSTRING::from(format!("Local\\PcManager.Test.{pid}.Show"));
+        let (m, e) = (PCWSTR(m.as_ptr()), PCWSTR(e.as_ptr()));
+        let Acquire::First(first) = acquire_named(m, e, false).unwrap() else { panic!("lần 1 phải là bản đầu") };
+        assert!(!first.wait_show(Duration::ZERO), "chưa ai yêu cầu hiện cửa sổ");
+        assert!(matches!(acquire_named(m, e, true).unwrap(), Acquire::AlreadyRunning));
+        assert!(first.wait_show(Duration::from_secs(1)), "bản sau phải báo được cho bản đầu");
         drop(first);
-        assert!(matches!(acquire(false).unwrap(), Acquire::First(_)), "nhả xong thì giành lại được");
+        assert!(matches!(acquire_named(m, e, false).unwrap(), Acquire::First(_)), "nhả xong thì giành lại được");
     }
 
     #[test]
