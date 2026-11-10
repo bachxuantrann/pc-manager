@@ -42,28 +42,48 @@ if (Test-Admin) {
     }
 
     if ($Mode -eq "ram") {
-        # Đo RAM khi rảnh: bản release, chạy ẩn ở tray (--tray), chờ 30s cho ổn định.
+        # Đo RAM bản release ở 2 trạng thái:
+        #   1) cửa sổ đang mở (Rust + WebView2)  2) chạy ngầm ở tray (--tray, không có WebView).
         $exe = Join-Path $tauri "target\release\pc-manager.exe"
         if (-not (Test-Path $exe)) { "Chưa có $exe — chạy 'npm run tauri build' trước." | Out-File $log -Encoding utf8; exit 2 }
-        $p = Start-Process $exe -ArgumentList "--tray" -PassThru
-        Start-Sleep -Seconds 30
-        $p.Refresh()
-        # Mọi tiến trình con cháu (WebView2) của app.
-        $all = Get-CimInstance Win32_Process
-        $ids = @($p.Id); $added = $true
-        while ($added) {
-            $added = $false
-            foreach ($x in $all) { if ($ids -contains $x.ParentProcessId -and $ids -notcontains $x.ProcessId) { $ids += $x.ProcessId; $added = $true } }
-        }
-        $kids = $ids | Where-Object { $_ -ne $p.Id } | ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
         $mb = { param($v) [math]::Round($v / 1MB, 1) }
-        $lines = @(
-            "PC Manager release — RAM khi rảnh (ẩn ở tray, sau 30 giây)",
-            ("Tiến trình Rust pc-manager.exe: Working set {0} MB, Private {1} MB" -f (& $mb $p.WorkingSet64), (& $mb $p.PrivateMemorySize64)),
-            ("WebView2 ({0} tiến trình con): Working set {1} MB, Private {2} MB" -f $kids.Count, (& $mb (($kids | Measure-Object WorkingSet64 -Sum).Sum)), (& $mb (($kids | Measure-Object PrivateMemorySize64 -Sum).Sum)))
-        )
-        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-        $kids | Stop-Process -Force -ErrorAction SilentlyContinue
+        # WebView2 của app: msedgewebview2.exe dùng thư mục dữ liệu của app (identifier trong tauri.conf.json).
+        $webviews = {
+            Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
+                Where-Object { $_.CommandLine -like "*com.pcmanager.app*" } |
+                ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
+        }
+        $measure = {
+            param([string] $title, [string[]] $appArgs, [int] $wait, [switch] $closeWindow)
+            if ($appArgs) { $p = Start-Process $exe -ArgumentList $appArgs -PassThru } else { $p = Start-Process $exe -PassThru }
+            if ($closeWindow) {
+                # Giống người dùng bấm X: WM_CLOSE tới cửa sổ chính.
+                Start-Sleep -Seconds 15
+                $p.Refresh()
+                [void] $p.CloseMainWindow()
+            }
+            Start-Sleep -Seconds $wait
+            $p.Refresh()
+            if ($p.HasExited) { return @("--- $title ---", "  LỖI: app đã thoát (mã $($p.ExitCode)) — lẽ ra phải chạy tiếp ở tray") }
+            $wv = @(& $webviews)
+            $wvWs = ($wv | Measure-Object WorkingSet64 -Sum).Sum
+            $wvPriv = ($wv | Measure-Object PrivateMemorySize64 -Sum).Sum
+            $out = @(
+                "--- $title (sau $wait giây) ---",
+                ("  Rust pc-manager.exe : Working set {0} MB, Private {1} MB" -f (& $mb $p.WorkingSet64), (& $mb $p.PrivateMemorySize64)),
+                ("  WebView2 ({0} tiến trình): Working set {1} MB, Private {2} MB" -f $wv.Count, (& $mb $wvWs), (& $mb $wvPriv)),
+                ("  TỔNG               : Working set {0} MB, Private {1} MB" -f (& $mb ($p.WorkingSet64 + $wvWs)), (& $mb ($p.PrivateMemorySize64 + $wvPriv)))
+            )
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+            & $webviews | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            $out
+        }
+        $lines = @("PC Manager release — đo RAM")
+        $lines += & $measure "Cửa sổ đang mở (trang Tổng quan)" @() 20
+        $lines += & $measure "Chạy ngầm ở tray (--tray)" @("--tray") 30
+        $lines += & $measure "Mở cửa sổ rồi bấm X (xuống tray)" @() 20 -closeWindow
         $lines += "`n=== ADMIN-TEST EXIT CODE: 0 ==="
         $lines | Out-File $log -Encoding utf8
         if (-not $Elevated) { Get-Content $log -Encoding utf8 }

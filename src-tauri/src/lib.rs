@@ -27,7 +27,7 @@ pub mod usage;
 
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 use crate::state::AppState;
 
@@ -105,22 +105,12 @@ pub fn run() {
             spawn_auto_smart_boost(app.handle().clone());
             spawn_usage_sampler(app.handle().clone());
             spawn_auto_clean(app.handle().clone());
-            // Khởi động cùng Windows (task với --tray): chạy ẩn ở khay hệ thống.
-            if std::env::args().any(|a| a == settings::TRAY_ARG) {
-                if let Some(w) = app.get_webview_window(tray::MAIN_WINDOW) {
-                    let _ = w.hide();
-                }
+            // Cửa sổ có `"create": false` trong tauri.conf.json: chỉ tạo khi cần.
+            // Khởi động cùng Windows (task với --tray) => không tạo WebView, chạy ngầm ở tray.
+            if !std::env::args().any(|a| a == settings::TRAY_ARG) {
+                tray::show_main_window(app.handle());
             }
             Ok(())
-        })
-        // Bấm X => ẩn xuống tray thay vì thoát. Thoát qua menu tray.
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == tray::MAIN_WINDOW {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
@@ -159,7 +149,13 @@ pub fn run() {
         .build(tauri::generate_context!());
 
     match result {
-        Ok(app) => app.run(|_app, _event| {}),
+        // Bấm X => cửa sổ đóng hẳn (WebView2 được giải phóng) nhưng app vẫn chạy ở tray.
+        // Chỉ thoát khi gọi `app.exit(..)` (menu tray "Thoát") — lúc đó `code` có giá trị.
+        Ok(app) => app.run(|_app, event| {
+            if let RunEvent::ExitRequested { code: None, api, .. } = event {
+                api.prevent_exit();
+            }
+        }),
         Err(e) => {
             eprintln!("Không khởi động được PC Manager: {e}");
             std::process::exit(1);

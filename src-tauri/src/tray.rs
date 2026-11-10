@@ -34,11 +34,26 @@ fn quick_boost(app: AppHandle) {
     });
 }
 
+/// Hiện cửa sổ chính; nếu đã bị đóng (ẩn xuống tray) thì tạo lại từ cấu hình.
+///
+/// Đóng cửa sổ = huỷ hẳn WebView2 (các tiến trình msedgewebview2 thoát), nên khi
+/// chạy ngầm ở tray chỉ còn tiến trình Rust. Đổi lại, mở lại mất ~1 giây.
 pub fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        return;
+    }
+    let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == MAIN_WINDOW).cloned() else {
+        eprintln!("không có cấu hình cửa sổ '{MAIN_WINDOW}'");
+        return;
+    };
+    match tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
+        Ok(w) => {
+            let _ = w.set_focus();
+        }
+        Err(e) => eprintln!("không tạo được cửa sổ chính: {e}"),
     }
 }
 
