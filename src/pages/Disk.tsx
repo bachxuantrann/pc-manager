@@ -76,6 +76,9 @@ function DriveCard({ d, selected, onSelect }: { d: DriveInfo; selected: boolean;
   );
 }
 
+/** File nên tránh: dữ liệu ứng dụng / ổ đĩa ảo (cảnh báo) hoặc bị chặn. */
+const isRisky = (f: FileItem) => !!f.warning || !!f.blocked;
+
 function progressText(p: DiskProgress | null): string {
   if (!p) return "Đang bắt đầu…";
   if (p.phase === "walk") return `Đang duyệt: ${p.files.toLocaleString("vi-VN")} file · ${formatBytes(p.bytes)}`;
@@ -145,6 +148,8 @@ export default function Disk() {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Ẩn file rủi ro (dữ liệu ứng dụng, ổ đĩa ảo, file bị chặn) — mặc định bật. */
+  const [safeOnly, setSafeOnly] = useState(true);
 
   const loadDrives = useCallback(() => {
     api
@@ -178,13 +183,28 @@ export default function Disk() {
   };
 
   const current = tab === "large" ? large : dups;
+  // Chỉ những gì đang hiện mới được chọn / chuyển vào Thùng rác.
+  const visibleLarge = useMemo(() => (large?.files ?? []).filter((f) => !safeOnly || !isRisky(f)), [large, safeOnly]);
+  // File trùng: chỉ giữ nhóm có ≥ 2 bản an toàn, và chỉ hiện các bản an toàn đó.
+  const visibleGroups = useMemo(
+    () =>
+      (dups?.groups ?? [])
+        .map((g) => (safeOnly ? { ...g, files: g.files.filter((f) => !isRisky(f)) } : g))
+        .filter((g) => g.files.length >= 2),
+    [dups, safeOnly],
+  );
+  const hiddenCount =
+    tab === "large"
+      ? (large?.files.length ?? 0) - visibleLarge.length
+      : (dups?.groups.length ?? 0) - visibleGroups.length;
   const allFiles: FileItem[] = useMemo(
-    () => (tab === "large" ? (large?.files ?? []) : (dups?.groups.flatMap((g) => g.files) ?? [])),
-    [tab, large, dups],
+    () => (tab === "large" ? visibleLarge : visibleGroups.flatMap((g) => g.files)),
+    [tab, visibleLarge, visibleGroups],
   );
   const byId = useMemo(() => new Map(allFiles.map((f) => [f.id, f])), [allFiles]);
   const outcome = (id: number) => report?.items.find((o) => o.id === id);
   const done = (id: number) => outcome(id)?.ok === true;
+  // File đã chọn nhưng giờ bị ẩn (vừa bật bộ lọc) thì không tính.
   const chosen = [...selected].map((id) => byId.get(id)).filter((f): f is FileItem => !!f);
   const chosenBytes = chosen.reduce((s, f) => s + f.size, 0);
   const chosenWarn = chosen.filter((f) => f.warning).length;
@@ -200,7 +220,7 @@ export default function Disk() {
   // File trùng: chọn tất cả trừ bản đầu (còn lại, không bị chặn) của mỗi nhóm.
   const autoSelectDups = () => {
     const next = new Set<number>();
-    for (const g of dups?.groups ?? []) {
+    for (const g of visibleGroups) {
       const live = g.files.filter((f) => !done(f.id));
       const keep = live.find((f) => !f.warning) ?? live[0];
       for (const f of live) if (f !== keep && !f.blocked) next.add(f.id);
@@ -210,7 +230,7 @@ export default function Disk() {
 
   // Nhóm mà người dùng chọn hết mọi bản còn lại — backend sẽ từ chối, báo trước ở UI.
   const groupsAllSelected =
-    tab === "dup" ? (dups?.groups ?? []).filter((g) => g.files.filter((f) => !done(f.id)).every((f) => selected.has(f.id))).length : 0;
+    tab === "dup" ? visibleGroups.filter((g) => g.files.filter((f) => !done(f.id)).every((f) => selected.has(f.id))).length : 0;
 
   const recycle = () =>
     setConfirm({
@@ -232,7 +252,7 @@ export default function Disk() {
         setBusy(true);
         setError(null);
         try {
-          const r = await api.diskRecycle(current.scanId, [...selected]);
+          const r = await api.diskRecycle(current.scanId, chosen.map((f) => f.id));
           setReport((prev) => (prev ? { ...r, items: [...prev.items.filter((o) => !r.items.some((n) => n.id === o.id)), ...r.items] } : r));
           setSelected(new Set());
           loadDrives();
@@ -339,7 +359,24 @@ export default function Disk() {
                 Chọn bản thừa
               </Button>
             )}
-            {selected.size > 0 && (
+            <label
+              className="flex cursor-pointer items-center gap-2"
+              title="Ẩn file trong AppData, ổ đĩa ảo (vhdx…) và file hệ thống/thư mục cài app để không chọn nhầm"
+            >
+              <input
+                type="checkbox"
+                className="accent-[var(--color-accent)]"
+                checked={safeOnly}
+                onChange={(e) => setSafeOnly(e.target.checked)}
+              />
+              Ẩn file rủi ro
+              {safeOnly && hiddenCount > 0 && (
+                <span className="opacity-60">
+                  (đã ẩn {hiddenCount} {tab === "large" ? "file" : "nhóm"})
+                </span>
+              )}
+            </label>
+            {chosen.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
                 Bỏ chọn
               </Button>
@@ -372,19 +409,19 @@ export default function Disk() {
               </thead>
               {tab === "large" ? (
                 <tbody>
-                  {large?.files.map((f) => (
+                  {visibleLarge.map((f) => (
                     <FileRow key={f.id} f={f} checked={selected.has(f.id)} onToggle={() => toggle(f.id)} status={outcome(f.id)} />
                   ))}
-                  {large?.files.length === 0 && (
+                  {visibleLarge.length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-10 text-center opacity-50">
-                        Không có file nào đạt ngưỡng
+                        {hiddenCount > 0 ? `Không có file an toàn — đã ẩn ${hiddenCount} file rủi ro` : "Không có file nào đạt ngưỡng"}
                       </td>
                     </tr>
                   )}
                 </tbody>
               ) : (
-                dups?.groups.map((g, gi) => (
+                visibleGroups.map((g, gi) => (
                   <tbody key={gi} className="border-t-4 border-black/5 dark:border-white/5">
                     <tr className="bg-black/[0.02] text-xs dark:bg-white/[0.03]">
                       <td />
@@ -398,11 +435,11 @@ export default function Disk() {
                   </tbody>
                 ))
               )}
-              {tab === "dup" && dups?.groups.length === 0 && (
+              {tab === "dup" && visibleGroups.length === 0 && (
                 <tbody>
                   <tr>
                     <td colSpan={4} className="py-10 text-center opacity-50">
-                      Không tìm thấy file trùng
+                      {hiddenCount > 0 ? `Không có nhóm trùng an toàn — đã ẩn ${hiddenCount} nhóm rủi ro` : "Không tìm thấy file trùng"}
                     </td>
                   </tr>
                 </tbody>
