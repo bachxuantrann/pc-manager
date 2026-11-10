@@ -108,9 +108,11 @@ with headless Edge into `docs/screenshots/`.
 ## Continuous integration and releases
 
 - **[CI](.github/workflows/ci.yml)** — on every push to `main` and every pull request: UI build,
-  Clippy, tests and an unsigned installer, uploaded as a workflow artifact for 14 days.
-- **[Release](.github/workflows/release.yml)** — on every `v*` tag: the same checks, then a GitHub
-  Release with the installer and its SHA-256 checksum.
+  Clippy and tests (a few minutes). It does not build the installer; build one locally with
+  `npm run tauri build` when you need it.
+- **[Release](.github/workflows/release.yml)** — on every `v*` tag: the same checks, then the
+  fully optimized installer and a GitHub Release with its SHA-256 checksum. Only tagged pushes
+  produce a release.
 
 To publish a release:
 

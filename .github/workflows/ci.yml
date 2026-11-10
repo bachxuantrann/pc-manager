@@ -1,5 +1,6 @@
-# Mỗi lần push lên main / mở PR: kiểm tra (clippy, test, build giao diện) và build bộ cài.
-# Bộ cài lưu thành artifact trong trang Actions — KHÔNG tạo Release (Release do release.yml làm khi push tag).
+# Mỗi lần push lên main / mở PR: kiểm tra nhanh (build giao diện, clippy, test).
+# Không build bộ cài ở đây: bản release (LTO fat) mất ~6 phút. Bộ cài chỉ build khi push tag v*
+# (release.yml), hoặc build trên máy bằng `npm run tauri build`.
 name: CI
 
 on:
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   check:
-    name: Kiểm tra + build (Windows)
+    name: Kiểm tra (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -48,13 +49,3 @@ jobs:
       - name: Test (bỏ qua test cần quyền Administrator)
         working-directory: src-tauri
         run: cargo test
-
-      - name: Build bộ cài (chưa ký)
-        run: npm run tauri build
-
-      - name: Lưu bộ cài
-        uses: actions/upload-artifact@v7
-        with:
-          name: pc-manager-setup-${{ github.sha }}
-          path: src-tauri/target/release/bundle/nsis/*-setup.exe
-          retention-days: 14
