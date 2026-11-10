@@ -5,6 +5,7 @@
 pub mod com;
 pub mod disk;
 pub mod handle;
+pub mod instance;
 pub mod memory;
 mod ntdll;
 pub mod process;

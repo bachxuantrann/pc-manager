@@ -99,23 +99,52 @@ fn spawn_auto_clean(app: AppHandle) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Luồng nhận yêu cầu "hiện cửa sổ" khi người dùng mở app lần nữa.
+fn spawn_show_listener(app: AppHandle, guard: sys::instance::InstanceGuard) {
+    std::thread::Builder::new()
+        .name("single-instance".into())
+        .spawn(move || loop {
+            if guard.wait_show(Duration::from_secs(3600)) {
+                let handle = app.clone();
+                let _ = app.run_on_main_thread(move || tray::show_main_window(&handle));
+            }
+        })
+        .map(|_| ())
+        .unwrap_or_else(|e| eprintln!("không tạo được thread single-instance: {e}"));
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let tray_only = std::env::args().any(|a| a == settings::TRAY_ARG);
+    // Vừa được chạy lại với quyền admin: chờ bản cũ thoát hẳn (nhả mutex, và WebView2
+    // của nó dùng chung thư mục dữ liệu) rồi mới khởi động.
+    if let Some(pid) = commands::arg_value(commands::WAIT_PID_ARG).and_then(|p| p.parse::<u32>().ok()) {
+        sys::process::wait_exit(pid, Duration::from_secs(10));
+    }
+    // Chỉ một bản chạy: đã có bản khác => nhờ nó hiện cửa sổ (trừ khi khởi động ngầm) rồi thoát.
+    let guard = match sys::instance::acquire(!tray_only) {
+        Ok(sys::instance::Acquire::First(g)) => Some(g),
+        Ok(sys::instance::Acquire::AlreadyRunning) => return,
+        Err(e) => {
+            eprintln!("không kiểm tra được bản đang chạy: {e}");
+            None
+        }
+    };
+
     let result = tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             let data_dir = app.path().app_data_dir().ok();
             app.manage(AppState::init(data_dir.as_deref()));
             tray::setup(app.handle())?;
             spawn_auto_smart_boost(app.handle().clone());
             spawn_usage_sampler(app.handle().clone());
             spawn_auto_clean(app.handle().clone());
+            if let Some(g) = guard {
+                spawn_show_listener(app.handle().clone(), g);
+            }
             // Cửa sổ có `"create": false` trong tauri.conf.json: chỉ tạo khi cần.
             // Khởi động cùng Windows (task với --tray) => không tạo WebView, chạy ngầm ở tray.
-            if !std::env::args().any(|a| a == settings::TRAY_ARG) {
-                // Vừa được chạy lại với quyền admin: chờ bản cũ thoát hẳn (WebView2 của
-                // nó dùng chung thư mục dữ liệu) rồi mới tạo cửa sổ.
-                if let Some(pid) = commands::arg_value(commands::WAIT_PID_ARG).and_then(|p| p.parse::<u32>().ok()) {
-                    sys::process::wait_exit(pid, Duration::from_secs(10));
-                }
+            if !tray_only {
                 tray::show_main_window(app.handle());
             }
             Ok(())
