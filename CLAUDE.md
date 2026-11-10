@@ -8,7 +8,8 @@ Mục tiêu: **nhẹ, nhanh, an toàn**. App tối ưu RAM thì bản thân khô
 - Rust stable, toolchain `x86_64-pc-windows-msvc`
 - `windows` crate (windows-rs) cho Win32/NT API; `sysinfo` chỉ dùng tạm khi chưa có impl native
 - `rusqlite` (feature `bundled`) cho lưu trữ, `serde`, `thiserror`, `anyhow` (chỉ ở tầng command), `rayon`, `jwalk`, `blake3`
-- v1 chạy **1 tiến trình**, mặc định **quyền thường** (manifest `asInvoker`, mở app không hỏi UAC). Chức năng cần admin: UI hiện nút "Chạy với quyền Administrator" → `ShellExecuteExW` verb `runas` chạy lại chính exe (UAC hỏi), bản cũ thoát. Backend phải chạy được khi thiếu quyền (báo "cần quyền Administrator", không crash). Tách Windows Service là việc của v2.
+- Chạy **1 tiến trình**, mặc định **quyền thường** (manifest `asInvoker`, mở app không hỏi UAC). Chức năng cần admin: UI hiện nút "Chạy với quyền Administrator" → `ShellExecuteExW` verb `runas` chạy lại chính exe (UAC hỏi), bản cũ thoát. Backend phải chạy được khi thiếu quyền (báo "cần quyền Administrator", không crash).
+- **Không tách Windows Service** (quyết định của người dùng): app dùng cho cá nhân và vài người bạn; service chạy quyền hệ thống nhận lệnh từ người dùng thường làm tăng rủi ro bảo mật mà lợi ích không đáng. Không đề xuất lại trừ khi người dùng yêu cầu.
 
 ## Cấu trúc
 ```
