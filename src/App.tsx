@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Sidebar, { type PageId } from "./components/Sidebar";
+import { MemoryFeedProvider } from "./hooks/useMemoryFeed";
 import Dashboard from "./pages/Dashboard";
 import Memory from "./pages/Memory";
 import Cleaner from "./pages/Cleaner";
@@ -22,11 +23,13 @@ export default function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const Page = PAGES[page];
   return (
-    <div className="flex h-full">
-      <Sidebar current={page} onSelect={setPage} />
-      <main className="flex-1 overflow-auto p-6">
-        <Page />
-      </main>
-    </div>
+    <MemoryFeedProvider>
+      <div className="flex h-full">
+        <Sidebar current={page} onSelect={setPage} />
+        <main className="flex-1 overflow-auto p-6">
+          <Page />
+        </main>
+      </div>
+    </MemoryFeedProvider>
   );
 }

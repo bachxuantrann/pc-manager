@@ -20,6 +20,12 @@ pub enum AppError {
     #[error("Đã huỷ")]
     Cancelled,
 
+    #[error("Đang bận: {0}")]
+    Busy(String),
+
+    #[error("Lỗi cơ sở dữ liệu: {0}")]
+    Db(#[from] rusqlite::Error),
+
     #[error("{0}")]
     Other(String),
 }
@@ -32,6 +38,8 @@ impl AppError {
             AppError::Forbidden(_) => "forbidden",
             AppError::NotFound(_) => "not_found",
             AppError::Cancelled => "cancelled",
+            AppError::Busy(_) => "busy",
+            AppError::Db(_) => "db",
             AppError::Other(_) => "other",
         }
     }

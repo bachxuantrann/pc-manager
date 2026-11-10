@@ -2,9 +2,37 @@
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
+
+use crate::commands::memory::run_boost;
+use crate::memory::{BoostMode, BoostTrigger};
+
+const MB: u64 = 1024 * 1024;
 
 pub const MAIN_WINDOW: &str = "main";
+const TRAY_ID: &str = "main-tray";
+
+fn set_tooltip(app: &AppHandle, text: &str) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some(text));
+    }
+}
+
+/// Boost từ menu tray; kết quả hiện ở tooltip (UI nhận event nếu đang mở).
+fn quick_boost(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        set_tooltip(&app, "PC Manager — đang Boost…");
+        let text = match run_boost(app.clone(), BoostTrigger::Tray, BoostMode::Light).await {
+            Ok(r) => format!(
+                "PC Manager — RAM khả dụng +{} MB, xoá {} MB cache",
+                r.gain.available_gain / MB,
+                r.gain.standby_cleared.unwrap_or(0) / MB
+            ),
+            Err(e) => format!("PC Manager — Boost lỗi: {e}"),
+        };
+        set_tooltip(&app, &text);
+    });
+}
 
 pub fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
@@ -15,22 +43,19 @@ pub fn show_main_window(app: &AppHandle) {
 }
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    let boost = MenuItem::with_id(app, "boost", "Boost nhanh", true, None::<&str>)?;
+    let boost = MenuItem::with_id(app, "boost", "Boost nhanh (nhẹ)", true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "Mở PC Manager", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&boost, &open, &sep, &quit])?;
 
-    let mut builder = TrayIconBuilder::with_id("main-tray")
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("PC Manager")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => show_main_window(app),
-            // Boost thật sẽ được nối vào module memory ở giai đoạn 1.
-            "boost" => {
-                let _ = app.emit("tray://boost", ());
-            }
+            "boost" => quick_boost(app.clone()),
             "quit" => app.exit(0),
             _ => {}
         })
