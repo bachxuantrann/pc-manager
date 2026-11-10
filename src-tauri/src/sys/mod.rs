@@ -4,6 +4,9 @@
 
 pub mod handle;
 pub mod memory;
+mod ntdll;
+pub mod process;
+pub mod signature;
 pub mod token;
 
 pub use handle::OwnedHandle;

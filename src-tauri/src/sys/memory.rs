@@ -8,25 +8,10 @@
 use std::ffi::c_void;
 use std::mem::size_of;
 
-use windows::Win32::Foundation::NTSTATUS;
 use windows::Win32::System::ProcessStatus::{GetPerformanceInfo, PERFORMANCE_INFORMATION};
 use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 
-/// `SYSTEM_INFORMATION_CLASS::SystemMemoryListInformation`.
-const SYSTEM_MEMORY_LIST_INFORMATION: u32 = 80;
-
-// Khai báo tay vì 2 hàm này không nằm trong feature ổn định của windows-rs.
-// `raw-dylib`: không cần ntdll.lib lúc link.
-#[link(name = "ntdll", kind = "raw-dylib")]
-extern "system" {
-    fn NtQuerySystemInformation(
-        class: u32,
-        info: *mut c_void,
-        info_len: u32,
-        return_len: *mut u32,
-    ) -> NTSTATUS;
-    fn NtSetSystemInformation(class: u32, info: *const c_void, info_len: u32) -> NTSTATUS;
-}
+use super::ntdll::{NtQuerySystemInformation, NtSetSystemInformation, SYSTEM_MEMORY_LIST_INFORMATION};
 
 /// Layout khớp `SYSTEM_MEMORY_LIST_INFORMATION` (phnt / ntexapi.h).
 #[repr(C)]

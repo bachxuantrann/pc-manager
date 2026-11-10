@@ -75,6 +75,13 @@ pub fn run() {
             commands::memory::memory_smart_boost,
             commands::memory::memory_settings,
             commands::memory::set_memory_settings,
+            commands::process::process_list,
+            commands::process::process_kill,
+            commands::process::process_suspend,
+            commands::process::process_resume,
+            commands::process::process_set_priority,
+            commands::process::process_trim,
+            commands::process::process_open_location,
         ])
         .build(tauri::generate_context!());
 

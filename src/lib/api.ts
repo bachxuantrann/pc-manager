@@ -78,6 +78,51 @@ export interface MemorySettings {
   smartAuto: boolean;
 }
 
+// ---- Process --------------------------------------------------------------
+
+export type PriorityClass = "idle" | "belowNormal" | "normal" | "aboveNormal" | "high";
+
+export type Publisher =
+  | { status: "unknown" }
+  | { status: "pending" }
+  | { status: "signed"; name: string; catalog: boolean }
+  | { status: "unsigned" }
+  | { status: "invalid"; code: string };
+
+/** Danh tính tiến trình. createTime là chuỗi (FILETIME vượt 2^53). */
+export interface ProcessRef {
+  pid: number;
+  createTime: string;
+}
+
+export interface ProcessInfo extends ProcessRef {
+  ppid: number;
+  name: string;
+  cpuPct: number;
+  privateBytes: number;
+  workingSet: number;
+  threads: number;
+  handles: number;
+  sessionId: number;
+  priority: PriorityClass | null;
+  suspended: boolean;
+  path: string | null;
+  publisher: Publisher;
+  protectedReason: string | null;
+}
+
+export interface ProcessSnapshot {
+  processes: ProcessInfo[];
+  cpuCount: number;
+  totalCpuPct: number;
+}
+
+export interface ProcessActionOutcome {
+  trimmedBytes: number | null;
+}
+
+const ref = (p: ProcessRef): ProcessRef => ({ pid: p.pid, createTime: p.createTime });
+
 export interface ActionLogEntry {
   ts: number;
   action: string;
@@ -96,6 +141,15 @@ export const api = {
   memorySettings: () => invoke<MemorySettings>("memory_settings"),
   setMemorySettings: (settings: MemorySettings) =>
     invoke<MemorySettings>("set_memory_settings", { settings }),
+
+  processList: () => invoke<ProcessSnapshot>("process_list"),
+  processKill: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_kill", { target: ref(p) }),
+  processSuspend: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_suspend", { target: ref(p) }),
+  processResume: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_resume", { target: ref(p) }),
+  processSetPriority: (p: ProcessRef, priority: PriorityClass) =>
+    invoke<ProcessActionOutcome>("process_set_priority", { target: ref(p), priority }),
+  processTrim: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_trim", { target: ref(p) }),
+  processOpenLocation: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_open_location", { target: ref(p) }),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

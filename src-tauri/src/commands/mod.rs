@@ -1,6 +1,7 @@
 //! Tauri commands: mỏng — validate input → gọi module → map lỗi.
 
 pub mod memory;
+pub mod process;
 
 use serde::Serialize;
 use tauri::State;

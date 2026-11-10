@@ -3,11 +3,13 @@
 use std::path::Path;
 
 use crate::memory::MemoryManager;
+use crate::process::ProcessManager;
 use crate::store::Store;
 
 pub struct AppState {
     pub store: Store,
     pub memory: MemoryManager,
+    pub process: ProcessManager,
 }
 
 impl AppState {
@@ -34,6 +36,6 @@ impl AppState {
                 std::process::exit(1);
             }
         };
-        Self { store, memory: MemoryManager::init() }
+        Self { store, memory: MemoryManager::init(), process: ProcessManager::default() }
     }
 }
