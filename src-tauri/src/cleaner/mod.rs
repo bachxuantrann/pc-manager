@@ -11,6 +11,7 @@ pub mod engine;
 pub mod glob;
 pub mod rules;
 pub mod safety;
+pub mod system;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

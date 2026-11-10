@@ -296,6 +296,28 @@ export interface LeftoverReport {
   items: { id: number; ok: boolean; message: string | null }[];
 }
 
+// ---- Dọn sâu hệ thống --------------------------------------------------------
+
+export interface WinSxsAnalysis {
+  actualSize: string | null;
+  recommended: boolean | null;
+  raw: string;
+  durationMs: number;
+}
+
+export interface SystemCleanReport {
+  freedBytes: number;
+  exitCode: number;
+  rebootRequired: boolean;
+  durationMs: number;
+}
+
+export interface WindowsOldInfo {
+  path: string;
+  exists: boolean;
+  bytes: number | null;
+}
+
 // ---- Disk -----------------------------------------------------------------
 
 export interface DriveInfo {
@@ -436,6 +458,12 @@ export const api = {
 
   onUninstallFinished: (cb: (e: UninstallFinished) => void): Promise<UnlistenFn> =>
     listen<UninstallFinished>("apps://uninstall-finished", (e) => cb(e.payload)),
+
+  systemWindowsOldInfo: () => invoke<WindowsOldInfo>("system_windows_old_info"),
+  systemAnalyzeWinsxs: () => invoke<WinSxsAnalysis>("system_analyze_winsxs"),
+  systemCleanWinsxs: (onProgress: (pct: number) => void) =>
+    invoke<SystemCleanReport>("system_clean_winsxs", { onProgress: channel(onProgress) }),
+  systemCleanWindowsOld: () => invoke<SystemCleanReport>("system_clean_windows_old"),
 
   diskDrives: () => invoke<DriveInfo[]>("disk_drives"),
   diskScanLarge: (root: string, minBytes: number, onProgress: (p: DiskProgress) => void) =>

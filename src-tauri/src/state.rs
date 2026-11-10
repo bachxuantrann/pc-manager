@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use crate::cleaner::system::SystemCleaner;
 use crate::cleaner::CleanerManager;
 use crate::disk::DiskManager;
 use crate::memory::MemoryManager;
@@ -15,6 +16,7 @@ pub struct AppState {
     pub process: ProcessManager,
     pub cleaner: CleanerManager,
     pub disk: DiskManager,
+    pub system: SystemCleaner,
     pub leftovers: LeftoverManager,
 }
 
@@ -49,6 +51,7 @@ impl AppState {
             process: ProcessManager::default(),
             cleaner: CleanerManager::from_system(),
             disk: DiskManager::default(),
+            system: SystemCleaner::default(),
             // Bản sao lưu .reg trước khi xoá key Uninstall.
             leftovers: LeftoverManager::new(
                 data_dir.map_or_else(|| std::env::temp_dir().join("pc-manager"), Path::to_path_buf).join("backups"),

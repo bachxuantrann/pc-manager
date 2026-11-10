@@ -3,6 +3,7 @@ import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import PageShell from "../components/PageShell";
+import SystemDeepClean from "../components/SystemDeepClean";
 import { AdminNotice } from "../components/Elevation";
 import { api, errorMessage, type CleanerProgress, type CleanReport, type Risk, type RuleScan, type ScanResult } from "../lib/api";
 import { formatBytes } from "../lib/format";
@@ -346,6 +347,7 @@ export default function Cleaner() {
       )}
 
       <ConfirmDialog req={confirm} onClose={() => setConfirm(null)} />
+      <SystemDeepClean />
     </PageShell>
   );
 }
