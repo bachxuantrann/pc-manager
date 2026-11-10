@@ -115,7 +115,10 @@ export default function BoostPanel() {
         <button
           type="button"
           disabled={disabled}
-          onClick={() => setConfirmDeep(true)}
+          onClick={() => {
+            setMsg(null);
+            setConfirmDeep(true);
+          }}
           className="rounded-md px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-300"
         >
           {busy === "deep" ? "Đang Boost sâu…" : "Boost sâu…"}

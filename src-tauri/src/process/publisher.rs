@@ -13,7 +13,7 @@ use crate::sys::process::enter_background_mode;
 use crate::sys::signature::{self, Signature};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
+#[serde(tag = "status", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Publisher {
     /// Không đọc được đường dẫn (tiến trình được bảo vệ / đã thoát).
     Unknown,

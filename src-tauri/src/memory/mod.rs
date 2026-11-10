@@ -62,8 +62,10 @@ pub struct BoostReport {
     pub duration_ms: u64,
 }
 
+/// `rename_all` chỉ đổi tên variant; `rename_all_fields` đổi tên trường bên
+/// trong variant (available_pct → availablePct) — thiếu nó UI nhận snake_case.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum SmartBoostOutcome {
     /// RAM còn đủ — không làm gì.
     Skipped { available_pct: f64, threshold_pct: u8 },
@@ -267,6 +269,13 @@ mod tests {
         assert!(MemorySettings { smart_threshold_pct: 90, smart_auto: false }.save(&store).is_err());
         // Thay đổi cài đặt cũng được ghi log.
         assert_eq!(store.recent_actions(10).unwrap().len(), 1);
+    }
+
+    /// Hợp đồng JSON với UI (src/lib/api.ts): tên trường phải là camelCase.
+    #[test]
+    fn smart_boost_outcome_json_matches_frontend() {
+        let v = serde_json::to_value(SmartBoostOutcome::Skipped { available_pct: 34.5, threshold_pct: 15 }).unwrap();
+        assert_eq!(v, serde_json::json!({ "kind": "skipped", "availablePct": 34.5, "thresholdPct": 15 }));
     }
 
     #[test]
