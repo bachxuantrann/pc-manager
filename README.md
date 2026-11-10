@@ -10,7 +10,7 @@ Quy tắc cho AI agent: [CLAUDE.md](CLAUDE.md). Lộ trình theo giai đoạn: [
 ```powershell
 npm install
 npm run tauri dev      # chạy trong terminal "Run as Administrator"
-npm run tauri build    # installer ở src-tauri/target/release/bundle/{msi,nsis}/
+npm run tauri build    # installer NSIS ở src-tauri/target/release/bundle/nsis/
 ```
 
 ## Kiểm tra trước khi xong một giai đoạn

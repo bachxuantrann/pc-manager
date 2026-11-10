@@ -62,7 +62,7 @@ pc-manager/
 
 ## Build & kiểm tra
 - Dev: `npm run tauri dev` (quyền thường). Cần thử chức năng admin: `scripts/admin-test.ps1 -Mode dev` hoặc bấm "Chạy với quyền Administrator" trong app.
-- Release: `npm run tauri build` → installer ở `src-tauri/target/release/bundle/{msi,nsis}/`.
+- Release: `npm run tauri build` → installer NSIS ở `src-tauri/target/release/bundle/nsis/` (chỉ NSIS trên Windows — đặt trong `tauri.windows.conf.json`; NSIS có hook xoá task khởi động khi gỡ, MSI không có).
 - Trước khi báo xong một task: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run build` đều phải pass.
 - Test cần quyền admin: đánh dấu `#[ignore = "cần quyền Administrator…"]`, chạy bằng `scripts/admin-test.ps1` (UAC hỏi mỗi lần, người dùng bấm Yes). Không tìm cách bỏ qua UAC.
 - Release profile: `opt-level=3, lto="fat", codegen-units=1, panic="abort", strip=true`.
