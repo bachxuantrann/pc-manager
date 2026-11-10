@@ -11,6 +11,21 @@ khởi động, tìm app lâu không dùng, file lớn và file trùng. Viết b
   Thùng rác, mọi thao tác đều được ghi nhật ký. Chi tiết: [docs/AN-TOAN.md](docs/AN-TOAN.md).
 - **Không đòi quyền admin khi mở:** chức năng nào cần thì mới hỏi.
 
+![Tổng quan](docs/screenshots/dashboard.png)
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/cleaner.png" alt="Dọn rác: xem trước theo quy tắc"></td>
+    <td><img src="docs/screenshots/disk.png" alt="Ổ đĩa: file trùng, ẩn file rủi ro"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/apps.png" alt="Ứng dụng: lần dùng cuối, gỡ cài đặt, dọn sót"></td>
+    <td><img src="docs/screenshots/settings.png" alt="Cài đặt: Smart Boost, lịch dọn, thư mục bảo vệ, nhật ký"></td>
+  </tr>
+</table>
+
+<sub>Ảnh chụp bằng dữ liệu giả (chế độ demo), không phải dữ liệu máy thật.</sub>
+
 ## Tính năng
 
 | Trang | Làm được gì |
@@ -128,6 +143,22 @@ bằng "Run as administrator" — mỗi lần chạy Windows hiện UAC để b�
 .\scripts\admin-test.ps1 -Mode ram       # đo RAM bản release (cần `npm run tauri build` trước)
 ```
 Log nằm ở `src-tauri/target/admin-test.log`.
+
+### CI và phát hành
+- **Mỗi lần push lên `main` / mở PR** ([ci.yml](.github/workflows/ci.yml)): build giao diện, clippy, test, build bộ cài
+  (chưa ký) — bộ cài tải được ở trang Actions, mục Artifacts.
+- **Phát hành bản mới** ([release.yml](.github/workflows/release.yml)): đổi `version` ở `package.json`,
+  `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, commit, rồi:
+  ```powershell
+  git tag -a v1.0.1 -m "PC Manager v1.0.1"; git push origin main v1.0.1
+  ```
+  GitHub tự kiểm tra, build bộ cài và tạo Release kèm SHA-256. Tag phải khớp phiên bản trong `package.json`.
+- **Ký bộ cài trên CI (tuỳ chọn):** chạy `.\scripts\new-ci-signing-cert.ps1` một lần (cần `gh auth login`) — tạo
+  chứng chỉ tự ký riêng cho CI và cất vào GitHub Secrets. Không có secret thì Release là bản chưa ký.
+
+### Ảnh chụp màn hình
+`npm run dev` rồi `.\scripts\screenshots.ps1` — mở các trang ở chế độ demo (`?demo&page=...`, dữ liệu giả trong
+`src/dev/demo.ts`, chỉ có ở bản dev) và chụp bằng Edge headless vào `docs/screenshots/`.
 
 ### Manifest
 `src-tauri/app.manifest` (asInvoker + Common-Controls v6) cho cả bản debug và release: mở app

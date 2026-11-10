@@ -1,0 +1,60 @@
+# Mỗi lần push lên main / mở PR: kiểm tra (clippy, test, build giao diện) và build bộ cài.
+# Bộ cài lưu thành artifact trong trang Actions — KHÔNG tạo Release (Release do release.yml làm khi push tag).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Kiểm tra + build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Cài thư viện frontend
+        run: npm ci
+
+      - name: Build giao diện (tsc + vite)
+        run: npm run build
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test (bỏ qua test cần quyền Administrator)
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Build bộ cài (chưa ký)
+        run: npm run tauri build
+
+      - name: Lưu bộ cài
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc-manager-setup-${{ github.sha }}
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          retention-days: 14
