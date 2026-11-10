@@ -123,6 +123,37 @@ export interface ProcessActionOutcome {
 
 const ref = (p: ProcessRef): ProcessRef => ({ pid: p.pid, createTime: p.createTime });
 
+// ---- Startup --------------------------------------------------------------
+
+export type StartupSource =
+  | "runUser"
+  | "runUser32"
+  | "runMachine"
+  | "runMachine32"
+  | "runOnceUser"
+  | "runOnceMachine"
+  | "runOnceMachine32"
+  | "startupFolderUser"
+  | "startupFolderCommon"
+  | "scheduledTask"
+  | "service";
+
+export interface StartupEntry {
+  id: string;
+  name: string;
+  /** Tên value trong Run hoặc tên file trong thư mục Startup — gửi lại khi bật/tắt. */
+  keyName: string;
+  source: StartupSource;
+  location: string;
+  command: string;
+  path: string | null;
+  publisher: Publisher;
+  enabled: boolean;
+  canToggle: boolean;
+  disabledAtMs: number | null;
+  note: string | null;
+}
+
 export interface ActionLogEntry {
   ts: number;
   action: string;
@@ -150,6 +181,10 @@ export const api = {
     invoke<ProcessActionOutcome>("process_set_priority", { target: ref(p), priority }),
   processTrim: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_trim", { target: ref(p) }),
   processOpenLocation: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_open_location", { target: ref(p) }),
+
+  startupList: () => invoke<StartupEntry[]>("startup_list"),
+  startupSetEnabled: (e: StartupEntry, enabled: boolean) =>
+    invoke<void>("startup_set_enabled", { source: e.source, name: e.keyName, enabled }),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

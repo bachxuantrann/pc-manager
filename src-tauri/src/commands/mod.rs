@@ -2,6 +2,7 @@
 
 pub mod memory;
 pub mod process;
+pub mod startup;
 
 use serde::Serialize;
 use tauri::State;

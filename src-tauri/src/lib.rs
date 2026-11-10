@@ -82,6 +82,8 @@ pub fn run() {
             commands::process::process_set_priority,
             commands::process::process_trim,
             commands::process::process_open_location,
+            commands::startup::startup_list,
+            commands::startup::startup_set_enabled,
         ])
         .build(tauri::generate_context!());
 

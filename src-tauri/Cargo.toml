@@ -3,7 +3,7 @@ name = "pc-manager"
 version = "0.1.0"
 description = "PC Manager — nhẹ, nhanh, an toàn"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.85"
 
 [lib]
 name = "pc_manager_lib"
@@ -19,6 +19,8 @@ serde_json = "1"
 thiserror = "2"
 anyhow = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Wrapper registry an toàn của dự án windows-rs (cùng windows-core 0.61).
+windows-registry = "0.5"
 
 [dependencies.windows]
 version = "0.61"
@@ -32,6 +34,12 @@ features = [
   "Win32_System_Threading",
   "Win32_System_ProcessStatus",
   "Win32_System_SystemInformation",
+  "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
+  "Win32_System_TaskScheduler",
+  "Win32_UI_Shell",
+  "Win32_Storage_FileSystem",
 ]
 
 [profile.release]
