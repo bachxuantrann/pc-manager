@@ -65,6 +65,9 @@ if (Test-Admin) {
             Start-Sleep -Seconds $wait
             $p.Refresh()
             if ($p.HasExited) { return @("--- $title ---", "  LỖI: app đã thoát (mã $($p.ExitCode)) — lẽ ra phải chạy tiếp ở tray") }
+            $wvCim = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -like "*com.pcmanager.app*" })
+            $types = ($wvCim | ForEach-Object { if ($_.CommandLine -match "--type=([\w-]+)") { $Matches[1] } else { "browser" } }) -join ", "
+            $gpuOff = [bool]($wvCim | Where-Object { $_.CommandLine -like "*--disable-gpu*" })
             $wv = @(& $webviews)
             $wvWs = ($wv | Measure-Object WorkingSet64 -Sum).Sum
             $wvPriv = ($wv | Measure-Object PrivateMemorySize64 -Sum).Sum
@@ -72,6 +75,7 @@ if (Test-Admin) {
                 "--- $title (sau $wait giây) ---",
                 ("  Rust pc-manager.exe : Working set {0} MB, Private {1} MB" -f (& $mb $p.WorkingSet64), (& $mb $p.PrivateMemorySize64)),
                 ("  WebView2 ({0} tiến trình): Working set {1} MB, Private {2} MB" -f $wv.Count, (& $mb $wvWs), (& $mb $wvPriv)),
+                ("  WebView2 gồm: [{0}] · --disable-gpu: {1}" -f $types, $gpuOff),
                 ("  TỔNG               : Working set {0} MB, Private {1} MB" -f (& $mb ($p.WorkingSet64 + $wvWs)), (& $mb ($p.PrivateMemorySize64 + $wvPriv)))
             )
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue

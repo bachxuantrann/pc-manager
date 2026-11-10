@@ -49,6 +49,7 @@ pub fn show_main_window(app: &AppHandle) {
         eprintln!("không có cấu hình cửa sổ '{MAIN_WINDOW}'");
         return;
     };
+    // Tham số WebView2 (tắt GPU…) lấy từ `additionalBrowserArgs` trong tauri.conf.json.
     match tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
         Ok(w) => {
             let _ = w.set_focus();

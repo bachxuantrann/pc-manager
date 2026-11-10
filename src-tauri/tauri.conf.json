@@ -14,6 +14,7 @@
       {
         "label": "main",
         "create": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu --renderer-process-limit=1 --disable-background-networking --disable-component-update --disable-sync --no-pings --disable-extensions",
         "title": "PC Manager",
         "width": 1100,
         "height": 720,
