@@ -18,6 +18,16 @@ npm run tauri build    # installer ở src-tauri/target/release/bundle/{msi,nsis
 cd src-tauri; cargo clippy --all-targets -- -D warnings; cargo test; cd ..; npm run build
 ```
 
+## Test với quyền Administrator
+Một số test (Boost thật, đọc đường dẫn service…) cần quyền admin. Script tự mở lại chính nó
+bằng "Run as administrator" — mỗi lần chạy Windows hiện UAC để bạn xác nhận, không lưu quyền:
+```powershell
+.\scripts\admin-test.ps1                 # toàn bộ test, kể cả test #[ignore] cần admin
+.\scripts\admin-test.ps1 -Filter memory  # chỉ test có "memory" trong tên
+.\scripts\admin-test.ps1 -Mode dev       # mở `npm run tauri dev` trong cửa sổ admin
+```
+Log nằm ở `src-tauri/target/admin-test.log`.
+
 ## Manifest
 - `src-tauri/app.manifest` (requireAdministrator + Common-Controls v6) nhúng vào bản **release**.
 - `src-tauri/app.dev.manifest` (asInvoker + Common-Controls v6) cho bản **debug**, để `cargo test`

@@ -61,6 +61,7 @@ pc-manager/
 - Dev: mở terminal **Run as Administrator** rồi `npm run tauri dev`.
 - Release: `npm run tauri build` → installer ở `src-tauri/target/release/bundle/{msi,nsis}/`.
 - Trước khi báo xong một task: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run build` đều phải pass.
+- Test cần quyền admin: đánh dấu `#[ignore = "cần quyền Administrator…"]`, chạy bằng `scripts/admin-test.ps1` (UAC hỏi mỗi lần, người dùng bấm Yes). Không tìm cách bỏ qua UAC.
 - Release profile: `opt-level=3, lto="fat", codegen-units=1, panic="abort", strip=true`.
 - Mục tiêu hiệu năng: RAM của tiến trình Rust < 30MB khi rảnh; installer < 10MB.
 
