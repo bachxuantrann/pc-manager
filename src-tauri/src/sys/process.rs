@@ -275,6 +275,16 @@ impl ProcessHandle {
     }
 }
 
+/// Thu gọn working set của CHÍNH PC Manager (sau khi đóng cửa sổ, phần bộ nhớ
+/// từng dùng cho WebView không cần nằm trong RAM nữa). Trang nào cần sẽ được nạp
+/// lại khi dùng tới.
+pub fn trim_self() -> windows::core::Result<()> {
+    use windows::Win32::System::Threading::GetCurrentProcess;
+    // SAFETY: GetCurrentProcess trả pseudo-handle luôn hợp lệ cho tiến trình hiện
+    // tại (có đủ quyền PROCESS_SET_QUOTA), không cần và không được CloseHandle.
+    unsafe { EmptyWorkingSet(GetCurrentProcess()) }
+}
+
 /// Đường dẫn exe của `pid` (không cần xác minh create_time — chỉ để hiển thị).
 pub fn image_path(pid: u32) -> Option<PathBuf> {
     // SAFETY: OpenProcess không có tiền điều kiện về con trỏ.

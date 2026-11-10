@@ -27,7 +27,7 @@ pub mod usage;
 
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager, RunEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
 use crate::state::AppState;
 
@@ -68,6 +68,9 @@ fn spawn_usage_sampler(app: AppHandle) {
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("không tạo được thread usage sampler: {e}"));
 }
+
+/// Chờ sau khi đóng cửa sổ rồi mới thu gọn bộ nhớ (để WebView2 giải phóng xong).
+const TRIM_AFTER_CLOSE: Duration = Duration::from_secs(5);
 
 /// Kiểm tra lịch dọn tự động mỗi 30 phút (rất nhẹ: chỉ đọc 1 dòng SQLite).
 const AUTO_CLEAN_CHECK: Duration = Duration::from_secs(30 * 60);
@@ -111,6 +114,21 @@ pub fn run() {
                 tray::show_main_window(app.handle());
             }
             Ok(())
+        })
+        // Cửa sổ chính bị đóng (xuống tray): chờ WebView2 dọn xong rồi thu gọn bộ nhớ của app.
+        .on_window_event(|window, event| {
+            if matches!(event, WindowEvent::Destroyed) && window.label() == tray::MAIN_WINDOW {
+                let app = window.app_handle().clone();
+                let _ = std::thread::Builder::new().name("trim-self".into()).spawn(move || {
+                    std::thread::sleep(TRIM_AFTER_CLOSE);
+                    // Người dùng đã mở lại cửa sổ trong lúc chờ => không thu gọn.
+                    if app.get_webview_window(tray::MAIN_WINDOW).is_none() {
+                        if let Err(e) = sys::process::trim_self() {
+                            eprintln!("không thu gọn được bộ nhớ: {e}");
+                        }
+                    }
+                });
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
