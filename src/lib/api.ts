@@ -299,7 +299,16 @@ export interface LeftoverReport {
 // ---- Dọn sâu hệ thống --------------------------------------------------------
 
 export interface WinSxsAnalysis {
+  /** Tổng kích thước thực của kho WinSxS. */
   actualSize: string | null;
+  /** Dùng chung với Windows (hard link) — KHÔNG dọn được. */
+  sharedWithWindows: string | null;
+  /** Bản sao lưu thành phần cũ + tính năng đang tắt. */
+  backups: string | null;
+  /** Cache / dữ liệu tạm của Windows Update. */
+  cache: string | null;
+  reclaimablePackages: number | null;
+  lastCleanup: string | null;
   recommended: boolean | null;
   raw: string;
   durationMs: number;

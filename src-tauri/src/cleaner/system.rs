@@ -27,8 +27,17 @@ const SAGE_SET: u32 = 4242;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WinSxsAnalysis {
-    /// Dung lượng thực của kho thành phần (None nếu không đọc được — DISM khác ngôn ngữ).
+    /// Tổng kích thước thực của kho thành phần (None nếu không đọc được).
     pub actual_size: Option<String>,
+    /// Phần dùng chung với Windows (hard link sang System32…) — KHÔNG dọn được.
+    pub shared_with_windows: Option<String>,
+    /// Bản sao lưu của thành phần cũ + tính năng đang tắt — dọn được một phần.
+    pub backups: Option<String>,
+    /// Cache / dữ liệu tạm của Windows Update — dọn được.
+    pub cache: Option<String>,
+    /// Số gói thay thế có thể thu hồi.
+    pub reclaimable_packages: Option<u32>,
+    pub last_cleanup: Option<String>,
     /// DISM có khuyên dọn không.
     pub recommended: Option<bool>,
     /// Dòng kết quả gốc của DISM (để hiện khi không phân tích được).
@@ -104,10 +113,20 @@ fn dism_field<'a>(out: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-pub fn parse_analysis(out: &str) -> (Option<String>, Option<bool>) {
-    let size = dism_field(out, "Actual Size of Component Store").map(str::to_owned);
-    let rec = dism_field(out, "Component Store Cleanup Recommended").map(|v| v.eq_ignore_ascii_case("yes"));
-    (size, rec)
+/// Phân tích output `DISM /AnalyzeComponentStore /English`. `raw` và `duration_ms` để trống.
+pub fn parse_analysis(out: &str) -> WinSxsAnalysis {
+    let f = |k: &str| dism_field(out, k).filter(|v| !v.is_empty()).map(str::to_owned);
+    WinSxsAnalysis {
+        actual_size: f("Actual Size of Component Store"),
+        shared_with_windows: f("Shared with Windows"),
+        backups: f("Backups and Disabled Features"),
+        cache: f("Cache and Temporary Data"),
+        reclaimable_packages: f("Number of Reclaimable Packages").and_then(|v| v.parse().ok()),
+        last_cleanup: f("Date of Last Cleanup"),
+        recommended: f("Component Store Cleanup Recommended").map(|v| v.eq_ignore_ascii_case("yes")),
+        raw: String::new(),
+        duration_ms: 0,
+    }
 }
 
 impl SystemCleaner {
@@ -128,9 +147,10 @@ impl SystemCleaner {
         if !out.status.success() {
             return Err(AppError::Other(format!("DISM lỗi (mã {}): {}", out.status.code().unwrap_or(-1), text.trim())));
         }
-        let (actual_size, recommended) = parse_analysis(&text);
-        let raw = text.lines().filter(|l| l.contains(" : ")).collect::<Vec<_>>().join("\n");
-        Ok(WinSxsAnalysis { actual_size, recommended, raw, duration_ms: started.elapsed().as_millis() as u64 })
+        let mut a = parse_analysis(&text);
+        a.raw = text.lines().filter(|l| l.contains(" : ")).map(str::trim).collect::<Vec<_>>().join("\n");
+        a.duration_ms = started.elapsed().as_millis() as u64;
+        Ok(a)
     }
 
     /// `DISM /StartComponentCleanup`. Tiến độ (%) gửi qua `on_progress`. Không huỷ được giữa chừng
@@ -236,9 +256,17 @@ mod tests {
 
     #[test]
     fn analysis_fields() {
-        let out = "Component Store (WinSxS) information:\r\n\r\nWindows Explorer Reported Size of Component Store : 8.12 GB\r\n\r\nActual Size of Component Store : 7.85 GB\r\n\r\nNumber of Reclaimable Packages : 3\r\nComponent Store Cleanup Recommended : Yes\r\n";
-        assert_eq!(parse_analysis(out), (Some("7.85 GB".into()), Some(true)));
-        assert_eq!(parse_analysis("Kích thước : 7 GB"), (None, None));
+        let out = "Component Store (WinSxS) information:\r\n\r\nWindows Explorer Reported Size of Component Store : 13.20 GB\r\n\r\nActual Size of Component Store : 12.67 GB\r\n\r\n    Shared with Windows : 9.84 GB\r\n    Backups and Disabled Features : 2.61 GB\r\n    Cache and Temporary Data : 220.41 MB\r\n\r\nDate of Last Cleanup : 2026-11-10 18:42:07\r\n\r\nNumber of Reclaimable Packages : 3\r\nComponent Store Cleanup Recommended : Yes\r\n";
+        let a = parse_analysis(out);
+        assert_eq!(a.actual_size.as_deref(), Some("12.67 GB"));
+        assert_eq!(a.shared_with_windows.as_deref(), Some("9.84 GB"));
+        assert_eq!(a.backups.as_deref(), Some("2.61 GB"));
+        assert_eq!(a.cache.as_deref(), Some("220.41 MB"));
+        assert_eq!(a.reclaimable_packages, Some(3));
+        assert_eq!(a.last_cleanup.as_deref(), Some("2026-11-10 18:42:07"), "giờ có dấu ':' vẫn đọc đúng");
+        assert_eq!(a.recommended, Some(true));
+        let none = parse_analysis("Kích thước : 7 GB");
+        assert!(none.actual_size.is_none() && none.recommended.is_none());
     }
 
     #[test]
@@ -256,7 +284,7 @@ mod tests {
     #[ignore = "cần quyền Administrator (DISM)"]
     fn analyze_winsxs_real() {
         let a = SystemCleaner::default().analyze_winsxs().unwrap();
-        println!("WinSxS: {:?} khuyên dọn: {:?}\n{}", a.actual_size, a.recommended, a.raw);
-        assert!(a.actual_size.is_some());
+        println!("{a:#?}");
+        assert!(a.actual_size.is_some() && a.shared_with_windows.is_some());
     }
 }

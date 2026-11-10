@@ -13,6 +13,39 @@ function freedText(r: SystemCleanReport): string {
   return `Xong sau ${Math.round(r.durationMs / 1000)} giây — ${freed}.${r.rebootRequired ? " Cần khởi động lại máy để hoàn tất." : ""}`;
 }
 
+/** Kết quả DISM /AnalyzeComponentStore: tách phần không dọn được khỏi phần dọn được. */
+function AnalysisView({ a }: { a: WinSxsAnalysis }) {
+  if (a.actualSize == null) {
+    // DISM không trả về định dạng mong đợi — hiện nguyên văn.
+    return <pre className="mt-1 whitespace-pre-wrap text-xs opacity-70">{a.raw}</pre>;
+  }
+  const row = (label: string, value: string | null, note: string, tone = "") =>
+    value != null && (
+      <div className="flex items-baseline gap-2">
+        <span className="w-48 shrink-0 opacity-70">{label}</span>
+        <b className={`w-20 shrink-0 text-right tabular-nums ${tone}`}>{value}</b>
+        <span className="opacity-60">{note}</span>
+      </div>
+    );
+  return (
+    <div className="mt-2 grid gap-0.5 text-xs">
+      {row("Tổng kho WinSxS", a.actualSize, "")}
+      {row("├ Dùng chung với Windows", a.sharedWithWindows, "chính là file Windows đang dùng — không dọn được", "opacity-60")}
+      {row("├ Bản sao lưu, tính năng tắt", a.backups, "dọn được một phần (bản cũ đã bị thay thế)")}
+      {row("└ Cache, dữ liệu tạm", a.cache, "dọn được")}
+      <div className="mt-1">
+        {a.recommended ? (
+          <b className="text-amber-700 dark:text-amber-300">DISM khuyên nên dọn</b>
+        ) : (
+          <span className="text-green-700 dark:text-green-400">Chưa cần dọn</span>
+        )}
+        {a.reclaimablePackages != null && ` · ${a.reclaimablePackages} gói có thể thu hồi`}
+        {a.lastCleanup && <span className="opacity-60"> · lần dọn gần nhất: {a.lastCleanup}</span>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Dọn sâu hệ thống bằng công cụ chính thức của Windows:
  * WinSxS qua DISM, Windows.old qua Disk Cleanup. Cần quyền Administrator.
@@ -53,6 +86,10 @@ export default function SystemDeepClean() {
             Chạy <code>DISM /StartComponentCleanup</code> — xoá các phiên bản cũ của thành phần Windows đã được thay bằng bản cập nhật
             mới. Thường mất 5–20 phút, <b>không dừng giữa chừng được</b>.
           </p>
+          <p>
+            Thường chỉ lấy lại vài trăm MB tới vài GB: phần lớn kho WinSxS là file Windows đang dùng (mục "Dùng chung với Windows") và
+            không bao giờ dọn được.
+          </p>
           <p className="text-xs opacity-70">Không dùng /ResetBase: các bản cập nhật đã cài vẫn gỡ được như bình thường.</p>
         </div>
       ),
@@ -63,8 +100,17 @@ export default function SystemDeepClean() {
         setMsg(null);
         try {
           const r = await api.systemCleanWinsxs(setProgress);
-          setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
+          setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)} Đang phân tích lại…` });
           setAnalysis(null);
+          setProgress(null);
+          // Phân tích lại để thấy kết quả sau khi dọn (~1 phút).
+          setBusy("analyze");
+          try {
+            setAnalysis(await api.systemAnalyzeWinsxs());
+            setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
+          } catch {
+            setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
+          }
         } catch (e) {
           setMsg({ tone: "error", text: `WinSxS: ${errorMessage(e)}` });
         } finally {
@@ -114,18 +160,7 @@ export default function SystemDeepClean() {
             <div className="text-xs opacity-70">
               Dọn bằng DISM — cách duy nhất an toàn. Không bao giờ xoá trực tiếp file trong WinSxS.
             </div>
-            {analysis && (
-              <div className="mt-1 text-xs">
-                {analysis.actualSize != null ? (
-                  <>
-                    Dung lượng thực: <b>{analysis.actualSize}</b> ·{" "}
-                    {analysis.recommended ? <b className="text-amber-700 dark:text-amber-300">DISM khuyên nên dọn</b> : "chưa cần dọn"}
-                  </>
-                ) : (
-                  <pre className="whitespace-pre-wrap opacity-70">{analysis.raw}</pre>
-                )}
-              </div>
-            )}
+            {analysis && <AnalysisView a={analysis} />}
             {busy === "winsxs" && (
               <div className="mt-2">
                 <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
