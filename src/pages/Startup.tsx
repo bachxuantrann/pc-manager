@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminNotice } from "../components/Elevation";
 import Button from "../components/Button";
 import { Notice } from "../components/Card";
 import { useWindowVisible } from "../hooks/useWindowVisible";
@@ -189,6 +190,9 @@ export default function Startup() {
           <Notice tone={msg.tone}>{msg.text}</Notice>
         </div>
       )}
+      <div className="mt-2 empty:hidden">
+        <AdminNotice>Mục khởi động của máy (HKLM, thư mục Startup chung) chỉ bật/tắt được với quyền Administrator.</AdminNotice>
+      </div>
       {error && (
         <div className="mt-2">
           <Notice tone="error">{error}</Notice>

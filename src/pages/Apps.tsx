@@ -3,6 +3,7 @@ import Button, { Spinner } from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import LeftoverDialog, { type LeftoverTarget } from "../components/LeftoverDialog";
+import { AdminNotice } from "../components/Elevation";
 import PageShell from "../components/PageShell";
 import { api, errorMessage, type AppsOverview, type InstalledApp, type UsageSource } from "../lib/api";
 import { daysAgo, formatBytes, formatDate, relativeDays } from "../lib/format";
@@ -211,6 +212,11 @@ export default function Apps() {
           {data.prefetchEntries != null ? `Prefetch (${data.prefetchEntries} mục)` : "Prefetch (cần quyền Administrator)"} · PC Manager
           {data.trackingSinceMs != null ? ` theo dõi từ ${formatDate(data.trackingSinceMs)}` : " (vừa bắt đầu theo dõi)"}.
         </p>
+      )}
+      {data && data.prefetchEntries == null && (
+        <div className="mt-2 empty:hidden">
+          <AdminNotice>Cần quyền Administrator để đọc Prefetch (lần dùng cuối chính xác hơn) và gỡ / dọn sót app cài cho cả máy.</AdminNotice>
+        </div>
       )}
 
       {(msg || error) && (

@@ -1,3 +1,5 @@
+import { ElevateButton, useElevation } from "./Elevation";
+
 export type PageId =
   | "dashboard"
   | "memory"
@@ -25,6 +27,7 @@ interface Props {
 }
 
 export default function Sidebar({ current, onSelect }: Props) {
+  const { elevated } = useElevation();
   return (
     <nav className="flex w-52 shrink-0 flex-col gap-1 border-r border-black/10 bg-white/70 p-3 dark:border-white/10 dark:bg-white/5">
       <div className="mb-4 px-3 pt-2 text-lg font-semibold">PC Manager</div>
@@ -46,6 +49,13 @@ export default function Sidebar({ current, onSelect }: Props) {
           </button>
         );
       })}
+      {elevated === false && (
+        <div className="mt-auto rounded-md bg-amber-100 p-2 text-xs text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">
+          <div className="mb-2">Đang chạy với quyền thường — một số chức năng bị hạn chế.</div>
+          <ElevateButton label="Quyền Administrator" />
+        </div>
+      )}
+      {elevated === true && <div className="mt-auto px-3 text-xs opacity-50">🛡 Quyền Administrator</div>}
     </nav>
   );
 }

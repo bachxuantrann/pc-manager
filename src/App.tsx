@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Sidebar, { type PageId } from "./components/Sidebar";
 import { MemoryFeedProvider } from "./hooks/useMemoryFeed";
+import { ElevationProvider } from "./components/Elevation";
 import Dashboard from "./pages/Dashboard";
 import Memory from "./pages/Memory";
 import Cleaner from "./pages/Cleaner";
@@ -24,7 +25,11 @@ const PAGES: Record<PageId, () => JSX.Element> = {
 export default function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const Page = PAGES[page];
+  const openStart = (p: string) => {
+    if (p in PAGES) setPage(p as PageId);
+  };
   return (
+    <ElevationProvider page={page} onStartPage={openStart}>
     <MemoryFeedProvider>
       <div className="flex h-full">
         <Sidebar current={page} onSelect={setPage} />
@@ -33,5 +38,6 @@ export default function App() {
         </main>
       </div>
     </MemoryFeedProvider>
+    </ElevationProvider>
   );
 }

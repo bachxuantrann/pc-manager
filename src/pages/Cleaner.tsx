@@ -3,6 +3,7 @@ import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import PageShell from "../components/PageShell";
+import { AdminNotice } from "../components/Elevation";
 import { api, errorMessage, type CleanerProgress, type CleanReport, type Risk, type RuleScan, type ScanResult } from "../lib/api";
 import { formatBytes } from "../lib/format";
 
@@ -269,6 +270,9 @@ export default function Cleaner() {
           <Notice tone="error">{error}</Notice>
         </div>
       )}
+      <div className="mb-4 empty:hidden">
+        <AdminNotice>Windows\Temp, crash dump hệ thống, Windows Update cache… chỉ dọn được với quyền Administrator.</AdminNotice>
+      </div>
 
       {phase === "idle" && (
         <Card className="flex flex-col items-center gap-3 py-12 text-center">

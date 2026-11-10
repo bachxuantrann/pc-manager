@@ -37,6 +37,34 @@ pub fn resolve_lnk(_com: &ComGuard, lnk: &Path) -> windows::core::Result<LinkTar
     Ok(LinkTarget { path: (!path.is_empty()).then(|| PathBuf::from(path)), args })
 }
 
+/// Mở `exe` với quyền Administrator (verb "runas" → Windows hiện hộp UAC).
+/// `Ok(true)` = đã khởi chạy; `Ok(false)` = người dùng bấm No ở UAC.
+pub fn run_elevated(exe: &Path, args: &str) -> windows::core::Result<bool> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_CANCELLED;
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
+
+    let verb = HSTRING::from("runas");
+    let file = HSTRING::from(exe.as_os_str());
+    let params = HSTRING::from(args);
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOASYNC,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        nShow: 1, // SW_SHOWNORMAL
+        ..Default::default()
+    };
+    // SAFETY: `info` có cbSize đúng; các chuỗi HSTRING NUL-terminated sống tới hết
+    // lời gọi; không yêu cầu hProcess (không có SEE_MASK_NOCLOSEPROCESS) nên không có handle để đóng.
+    match unsafe { ShellExecuteExW(&mut info) } {
+        Ok(()) => Ok(true),
+        Err(e) if e.code() == ERROR_CANCELLED.to_hresult() => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 fn wide_to_string(buf: &[u16]) -> String {
     let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
     String::from_utf16_lossy(&buf[..end])

@@ -3,7 +3,7 @@ import { api, errorMessage, type BoostReport } from "../lib/api";
 import { formatBytes, pct } from "../lib/format";
 import { useMemoryFeed } from "../hooks/useMemoryFeed";
 import Button from "./Button";
-import { Notice } from "./Card";
+import { AdminNotice } from "./Elevation";
 
 export const MEMORY_SETTINGS_CHANGED = "pcm:memory-settings-changed";
 
@@ -146,7 +146,7 @@ export default function BoostPanel() {
   return (
     <div className="flex flex-col gap-3">
       {overview && !privileged && (
-        <Notice tone="warn">Cần chạy PC Manager với quyền Administrator để Boost và đọc standby/modified.</Notice>
+        <AdminNotice>Cần quyền Administrator để Boost và đọc standby/modified.</AdminNotice>
       )}
       <div className="grid items-start gap-3 lg:grid-cols-3">
         <BoostCard

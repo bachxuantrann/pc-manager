@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { AdminNotice } from "../components/Elevation";
 import Button from "../components/Button";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 
@@ -350,6 +351,9 @@ export default function Processes() {
           <Notice tone={msg.tone}>{msg.text}</Notice>
         </div>
       )}
+      <div className="mt-2 empty:hidden">
+        <AdminNotice>Tiến trình của hệ thống / tài khoản khác chỉ kết thúc, tạm dừng hay đổi ưu tiên được với quyền Administrator.</AdminNotice>
+      </div>
       {error && (
         <div className="mt-2">
           <Notice tone="error">{error}</Notice>

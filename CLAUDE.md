@@ -8,7 +8,7 @@ Mục tiêu: **nhẹ, nhanh, an toàn**. App tối ưu RAM thì bản thân khô
 - Rust stable, toolchain `x86_64-pc-windows-msvc`
 - `windows` crate (windows-rs) cho Win32/NT API; `sysinfo` chỉ dùng tạm khi chưa có impl native
 - `rusqlite` (feature `bundled`) cho lưu trữ, `serde`, `thiserror`, `anyhow` (chỉ ở tầng command), `rayon`, `jwalk`, `blake3`
-- v1 chạy **1 tiến trình với quyền admin** (manifest `requireAdministrator`). Tách Windows Service là việc của v2.
+- v1 chạy **1 tiến trình**, mặc định **quyền thường** (manifest `asInvoker`, mở app không hỏi UAC). Chức năng cần admin: UI hiện nút "Chạy với quyền Administrator" → `ShellExecuteExW` verb `runas` chạy lại chính exe (UAC hỏi), bản cũ thoát. Backend phải chạy được khi thiếu quyền (báo "cần quyền Administrator", không crash). Tách Windows Service là việc của v2.
 
 ## Cấu trúc
 ```
@@ -17,7 +17,7 @@ pc-manager/
 │   ├── pages/  Dashboard, Memory, Cleaner, Processes, Startup, Apps, Settings
 │   ├── components/  hooks/  lib/api.ts   # mọi invoke() gom ở api.ts, có type
 ├── src-tauri/
-│   ├── build.rs              # nhúng app manifest (admin)
+│   ├── build.rs              # nhúng app manifest (asInvoker + Common-Controls v6)
 │   └── src/
 │       ├── main.rs  lib.rs   # đăng ký commands, tray
 │       ├── commands/         # mỏng: validate input -> gọi module -> map lỗi
@@ -57,16 +57,16 @@ pc-manager/
 - **Apps không dùng**: app cài đặt từ registry `Uninstall` (HKLM, HKCU, WOW6432Node) với DisplayName, size, InstallDate, UninstallString. Last-used = max(UserAssist, Prefetch `.pf` last run time, sampling của app lưu SQLite mỗi 60s khi app chạy ngầm ở tray). Gỡ cài đặt = chạy UninstallString (hỏi xác nhận).
 - **Cleaner**: rule engine TOML; dọn Temp, Windows\Temp, thumbnail cache, crash dumps, log, cache Chrome/Edge/Firefox (bỏ qua khi trình duyệt đang chạy), Windows Update cache (stop/start `wuauserv`), Delivery Optimization, Recycle Bin (`SHEmptyRecycleBin`).
 - **Disk**: dung lượng các ổ, tìm file lớn (jwalk), file trùng (nhóm theo size → hash blake3 phần đầu → hash full).
-- **Tray**: chạy nền, menu Boost nhanh / Mở / Thoát. Tuỳ chọn khởi động cùng Windows qua Task Scheduler (vì app cần admin, Run key sẽ bị chặn UAC).
+- **Tray**: chạy nền, menu Boost nhanh / Mở / Thoát. Tuỳ chọn khởi động cùng Windows qua Task Scheduler (task "chạy với quyền cao nhất" để app có quyền admin mà không hỏi UAC; chỉ cho bật khi exe nằm trong Program Files; bật/tắt cần quyền admin).
 
 ## Build & kiểm tra
-- Dev: mở terminal **Run as Administrator** rồi `npm run tauri dev`.
+- Dev: `npm run tauri dev` (quyền thường). Cần thử chức năng admin: `scripts/admin-test.ps1 -Mode dev` hoặc bấm "Chạy với quyền Administrator" trong app.
 - Release: `npm run tauri build` → installer ở `src-tauri/target/release/bundle/{msi,nsis}/`.
 - Trước khi báo xong một task: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run build` đều phải pass.
 - Test cần quyền admin: đánh dấu `#[ignore = "cần quyền Administrator…"]`, chạy bằng `scripts/admin-test.ps1` (UAC hỏi mỗi lần, người dùng bấm Yes). Không tìm cách bỏ qua UAC.
 - Release profile: `opt-level=3, lto="fat", codegen-units=1, panic="abort", strip=true`.
 - Mục tiêu hiệu năng: RAM của tiến trình Rust < 30MB khi rảnh; installer < 10MB.
 
-## Lưu ý manifest admin (build.rs)
+## Lưu ý manifest (build.rs)
 Dùng `tauri_build::WindowsAttributes::new().app_manifest(include_str!("app.manifest"))`.
-Manifest phải có `requestedExecutionLevel level="requireAdministrator"` VÀ dependency `Microsoft.Windows.Common-Controls` version 6.0.0.0 — thiếu cái này dialog/message box sẽ lỗi.
+Manifest có `requestedExecutionLevel level="asInvoker"` VÀ dependency `Microsoft.Windows.Common-Controls` version 6.0.0.0 — thiếu cái này dialog/message box sẽ lỗi. Không đổi lại `requireAdministrator` (quyết định của người dùng: mở app không hỏi UAC).

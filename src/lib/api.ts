@@ -21,6 +21,8 @@ export interface AppInfo {
   version: string;
   isElevated: boolean;
   pid: number;
+  /** Trang cần mở ngay (vừa chạy lại với quyền admin). */
+  startPage: string | null;
 }
 
 // ---- Memory ---------------------------------------------------------------
@@ -372,6 +374,8 @@ export interface GeneralSettings {
   autostart: boolean;
   /** Lý do không được bật khởi động cùng Windows (app không cài trong Program Files). */
   autostartBlocked: string | null;
+  /** App đang có quyền Administrator (cần để bật/tắt khởi động cùng Windows). */
+  elevated: boolean;
 }
 
 function channel<T>(cb: (v: T) => void): Channel<T> {
@@ -390,6 +394,8 @@ export interface ActionLogEntry {
 
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
+  /** Mở lại app với quyền Administrator (UAC). Huỷ => lỗi code "cancelled". */
+  relaunchElevated: (page: string) => invoke<void>("app_relaunch_elevated", { page }),
   recentActions: (limit = 50) => invoke<ActionLogEntry[]>("recent_actions", { limit }),
 
   memoryStatus: () => invoke<MemoryOverview>("memory_status"),

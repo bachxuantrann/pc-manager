@@ -285,6 +285,19 @@ pub fn trim_self() -> windows::core::Result<()> {
     unsafe { EmptyWorkingSet(GetCurrentProcess()) }
 }
 
+/// Chờ tiến trình `pid` thoát, tối đa `timeout`. `true` nếu đã thoát (hoặc không còn tồn tại).
+pub fn wait_exit(pid: u32, timeout: std::time::Duration) -> bool {
+    use windows::Win32::Foundation::WAIT_OBJECT_0;
+    use windows::Win32::System::Threading::{WaitForSingleObject, PROCESS_SYNCHRONIZE};
+    // SAFETY: OpenProcess không có tiền điều kiện về con trỏ.
+    let Ok(raw) = (unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid) }) else { return true };
+    // SAFETY: handle mới mở, ta sở hữu duy nhất.
+    let Some(h) = (unsafe { OwnedHandle::from_raw(raw) }) else { return true };
+    let ms = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
+    // SAFETY: `h` là handle tiến trình hợp lệ có quyền SYNCHRONIZE, sống tới hết lời gọi.
+    unsafe { WaitForSingleObject(h.raw(), ms) == WAIT_OBJECT_0 }
+}
+
 /// Đường dẫn exe của `pid` (không cần xác minh create_time — chỉ để hiển thị).
 pub fn image_path(pid: u32) -> Option<PathBuf> {
     // SAFETY: OpenProcess không có tiền điều kiện về con trỏ.

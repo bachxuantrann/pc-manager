@@ -8,13 +8,31 @@ pub mod process;
 pub mod settings;
 pub mod startup;
 
-use serde::Serialize;
-use tauri::State;
+use std::time::Duration;
 
-use crate::error::AppResult;
+use serde::Serialize;
+use tauri::{AppHandle, State};
+
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::store::ActionLogEntry;
 use crate::sys;
+
+/// Tham số dòng lệnh: trang mở sẵn sau khi chạy lại với quyền admin.
+pub const PAGE_ARG: &str = "--page=";
+/// Tham số dòng lệnh: chờ tiến trình cũ (PID) thoát trước khi tạo cửa sổ —
+/// tránh 2 WebView2 khác mức quyền dùng chung một thư mục dữ liệu.
+pub const WAIT_PID_ARG: &str = "--wait-pid=";
+
+/// Id trang hợp lệ: chữ thường a-z, tối đa 16 ký tự.
+fn valid_page(p: &str) -> bool {
+    !p.is_empty() && p.len() <= 16 && p.bytes().all(|b| b.is_ascii_lowercase())
+}
+
+/// Giá trị của tham số `--xxx=` trên dòng lệnh.
+pub fn arg_value(prefix: &str) -> Option<String> {
+    std::env::args().find_map(|a| a.strip_prefix(prefix).map(str::to_owned))
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +40,8 @@ pub struct AppInfo {
     pub version: &'static str,
     pub is_elevated: bool,
     pub pid: u32,
+    /// Trang cần mở ngay (khi vừa chạy lại với quyền admin).
+    pub start_page: Option<String>,
 }
 
 #[tauri::command]
@@ -30,10 +50,55 @@ pub async fn app_info() -> AppResult<AppInfo> {
         version: env!("CARGO_PKG_VERSION"),
         is_elevated: sys::token::is_elevated()?,
         pid: std::process::id(),
+        start_page: arg_value(PAGE_ARG).filter(|p| valid_page(p)),
     })
+}
+
+/// Chạy lại PC Manager với quyền Administrator (Windows hỏi UAC), rồi thoát bản hiện tại.
+/// Người dùng bấm No => trả lỗi `Cancelled`, app hiện tại chạy tiếp như cũ.
+#[tauri::command]
+pub async fn app_relaunch_elevated(app: AppHandle, state: State<'_, AppState>, page: Option<String>) -> AppResult<()> {
+    if sys::token::is_elevated()? {
+        return Err(AppError::InvalidInput("PC Manager đã chạy với quyền Administrator".into()));
+    }
+    let exe = std::env::current_exe()?;
+    let mut args = format!("{WAIT_PID_ARG}{}", std::process::id());
+    if let Some(p) = page.filter(|p| valid_page(p)) {
+        args.push_str(&format!(" {PAGE_ARG}{p}"));
+    }
+    let started = tauri::async_runtime::spawn_blocking(move || sys::shell::run_elevated(&exe, &args))
+        .await
+        .map_err(|e| AppError::Other(format!("relaunch task: {e}")))??;
+    state.store.log_action_best_effort(
+        "app.elevate",
+        "PC Manager",
+        started,
+        if started { "chạy lại với quyền Administrator" } else { "người dùng huỷ UAC" },
+    );
+    if !started {
+        return Err(AppError::Cancelled);
+    }
+    // Trả kết quả cho UI trước rồi mới thoát; bản mới chờ PID này thoát rồi mới mở cửa sổ.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        app.exit(0);
+    });
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn recent_actions(state: State<'_, AppState>, limit: u32) -> AppResult<Vec<ActionLogEntry>> {
     state.store.recent_actions(limit.clamp(1, 500))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn page_ids() {
+        assert!(super::valid_page("cleaner"));
+        assert!(!super::valid_page("Cleaner"));
+        assert!(!super::valid_page("a b"));
+        assert!(!super::valid_page(""));
+        assert!(!super::valid_page("x\"; calc"));
+    }
 }

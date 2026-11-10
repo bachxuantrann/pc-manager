@@ -30,6 +30,8 @@ bằng "Run as administrator" — mỗi lần chạy Windows hiện UAC để b�
 Log nằm ở `src-tauri/target/admin-test.log`.
 
 ## Manifest
-- `src-tauri/app.manifest` (requireAdministrator + Common-Controls v6) nhúng vào bản **release**.
-- `src-tauri/app.dev.manifest` (asInvoker + Common-Controls v6) cho bản **debug**, để `cargo test`
-  và `tauri dev` không lỗi 740. Muốn có quyền admin khi dev thì mở terminal bằng quyền Administrator.
+- `src-tauri/app.manifest` (asInvoker + Common-Controls v6) cho cả bản debug và release: mở app
+  **không hỏi UAC**, chạy với quyền thường.
+- Chức năng cần quyền admin (Boost, dọn file hệ thống, Prefetch, mục khởi động của máy…) hiện nút
+  **"Chạy với quyền Administrator"**: app tự mở lại chính nó qua UAC rồi thoát bản cũ.
+- Khởi động cùng Windows (task Task Scheduler "quyền cao nhất") chạy luôn với quyền admin, không hỏi UAC.

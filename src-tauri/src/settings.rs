@@ -184,6 +184,10 @@ pub fn autostart_allowed() -> Result<PathBuf, String> {
 }
 
 pub fn set_autostart(store: &Store, enabled: bool) -> AppResult<bool> {
+    // Tạo / xoá task "chạy với quyền cao nhất" đều cần quyền Administrator.
+    if !crate::sys::token::is_elevated().unwrap_or(false) {
+        return Err(AppError::Forbidden("cần chạy PC Manager với quyền Administrator để đổi tuỳ chọn này".into()));
+    }
     let result = if enabled {
         let exe = match autostart_allowed() {
             Ok(p) => p,

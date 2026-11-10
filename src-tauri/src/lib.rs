@@ -111,6 +111,11 @@ pub fn run() {
             // Cửa sổ có `"create": false` trong tauri.conf.json: chỉ tạo khi cần.
             // Khởi động cùng Windows (task với --tray) => không tạo WebView, chạy ngầm ở tray.
             if !std::env::args().any(|a| a == settings::TRAY_ARG) {
+                // Vừa được chạy lại với quyền admin: chờ bản cũ thoát hẳn (WebView2 của
+                // nó dùng chung thư mục dữ liệu) rồi mới tạo cửa sổ.
+                if let Some(pid) = commands::arg_value(commands::WAIT_PID_ARG).and_then(|p| p.parse::<u32>().ok()) {
+                    sys::process::wait_exit(pid, Duration::from_secs(10));
+                }
                 tray::show_main_window(app.handle());
             }
             Ok(())
@@ -132,6 +137,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
+            commands::app_relaunch_elevated,
             commands::recent_actions,
             commands::memory::memory_status,
             commands::memory::memory_boost,

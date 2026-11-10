@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import PageShell from "../components/PageShell";
+import { AdminNotice } from "../components/Elevation";
 import { api, errorMessage, type ActionLogEntry, type AppInfo, type GeneralSettings } from "../lib/api";
 import { SmartSettings } from "./Memory";
 
@@ -170,7 +171,7 @@ function AutostartSettings({ s, onChange }: { s: GeneralSettings; onChange: (s: 
           className="accent-[var(--color-accent)]"
           checked={s.autostart}
           // Luôn cho TẮT; chỉ cho BẬT khi app được cài trong Program Files.
-          disabled={busy || (!s.autostart && !!s.autostartBlocked)}
+          disabled={busy || !s.elevated || (!s.autostart && !!s.autostartBlocked)}
           onChange={(e) => set(e.target.checked)}
         />
         Khởi động cùng Windows (chạy ẩn ở khay hệ thống)
@@ -180,7 +181,8 @@ function AutostartSettings({ s, onChange }: { s: GeneralSettings; onChange: (s: 
         sẽ chạy với quyền Administrator mà không hỏi lại, nên chỉ được bật khi PC Manager được cài trong Program Files (chỉ admin mới
         sửa được file ở đó).
       </p>
-      {s.autostartBlocked && <Notice tone="warn">{s.autostartBlocked}</Notice>}
+      {!s.elevated && <AdminNotice>Bật/tắt tuỳ chọn này cần quyền Administrator.</AdminNotice>}
+      {s.elevated && s.autostartBlocked && <Notice tone="warn">{s.autostartBlocked}</Notice>}
       {err && <Notice tone="error">{err}</Notice>}
     </div>
   );
