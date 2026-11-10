@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
+import Button from "../components/Button";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
+
+type Action = "open" | "trim" | "priority" | "suspend" | "resume" | "kill" | "killGroup";
 import { Notice } from "../components/Card";
 import { useVisibleInterval } from "../hooks/useWindowVisible";
 import { api, errorMessage, type PriorityClass, type ProcessInfo, type ProcessSnapshot, type Publisher } from "../lib/api";
@@ -53,7 +56,9 @@ export default function Processes() {
   const [sel, setSel] = useState<Selection>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  /** Thao tác đang chạy — để hiện spinner đúng trên nút đó. */
+  const [busyAction, setBusyAction] = useState<Action | null>(null);
+  const busy = busyAction !== null;
 
   const refresh = useCallback(() => {
     api
@@ -74,8 +79,8 @@ export default function Processes() {
     sel?.kind === "proc" ? (snap?.processes.find((p) => procKey(p) === sel.key) ?? null) : null;
   const selectedGroup: Group | null = sel?.kind === "group" ? (groups.find((g) => g.key === sel.key) ?? null) : null;
 
-  const run = async (label: string, fn: () => Promise<{ trimmedBytes: number | null }>) => {
-    setBusy(true);
+  const run = async (action: Action, label: string, fn: () => Promise<{ trimmedBytes: number | null }>) => {
+    setBusyAction(action);
     setMsg(null);
     try {
       const r = await fn();
@@ -84,7 +89,7 @@ export default function Processes() {
     } catch (e) {
       setMsg({ tone: "error", text: `${label}: ${errorMessage(e)}` });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -101,7 +106,7 @@ export default function Processes() {
       ),
       confirmLabel: "Kết thúc",
       danger: true,
-      onConfirm: () => run(`Kết thúc ${p.name}`, () => api.processKill(p)),
+      onConfirm: () => run("kill", `Kết thúc ${p.name}`, () => api.processKill(p)),
     });
 
   const killGroup = (g: Group) => {
@@ -112,7 +117,7 @@ export default function Processes() {
       confirmLabel: "Kết thúc tất cả",
       danger: true,
       onConfirm: () =>
-        run(`Kết thúc ${g.name}`, async () => {
+        run("killGroup", `Kết thúc ${g.name}`, async () => {
           const results = await Promise.allSettled(targets.map((m) => api.processKill(m)));
           const failed = results.filter((r) => r.status === "rejected").length;
           if (failed) throw new Error(`${failed}/${targets.length} tiến trình không kết thúc được`);
@@ -126,7 +131,7 @@ export default function Processes() {
       title: `Tạm dừng ${p.name}?`,
       body: "Ứng dụng sẽ đứng hình (không phản hồi) cho tới khi bạn bấm Tiếp tục. Không tạm dừng ứng dụng đang ghi file hoặc tải dữ liệu.",
       confirmLabel: "Tạm dừng",
-      onConfirm: () => run(`Tạm dừng ${p.name}`, () => api.processSuspend(p)),
+      onConfirm: () => run("suspend", `Tạm dừng ${p.name}`, () => api.processSuspend(p)),
     });
 
   const trim = (p: ProcessInfo) =>
@@ -134,7 +139,7 @@ export default function Processes() {
       title: `Giảm RAM của ${p.name}?`,
       body: "Windows sẽ đẩy bộ nhớ của tiến trình này ra cache/pagefile. Ứng dụng có thể chậm một chút khi dùng lại.",
       confirmLabel: "Giảm RAM",
-      onConfirm: () => run(`Giảm RAM ${p.name}`, () => api.processTrim(p)),
+      onConfirm: () => run("trim", `Giảm RAM ${p.name}`, () => api.processTrim(p)),
     });
 
   const setPriority = (p: ProcessInfo, pr: PriorityClass) =>
@@ -147,7 +152,7 @@ export default function Processes() {
         </>
       ),
       confirmLabel: "Đổi",
-      onConfirm: () => run(`Đổi ưu tiên ${p.name}`, () => api.processSetPriority(p, pr)),
+      onConfirm: () => run("priority", `Đổi ưu tiên ${p.name}`, () => api.processSetPriority(p, pr)),
     });
 
   const onSort = (key: SortKey) =>
@@ -168,7 +173,7 @@ export default function Processes() {
       <tr
         key={k}
         onClick={() => setSel({ kind: "proc", key: k })}
-        className={`cursor-default border-t border-black/5 dark:border-white/5 ${active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5"}`}
+        className={`cursor-pointer border-t border-black/5 dark:border-white/5 ${active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5"}`}
       >
         <td className={`py-1.5 pr-2 ${indent ? "pl-8" : "pl-3"}`} title={p.protectedReason ?? p.name}>
           <div className="flex min-w-0 items-center gap-1">
@@ -201,7 +206,7 @@ export default function Processes() {
         key={`g:${g.key}`}
         onClick={() => setSel({ kind: "group", key: g.key })}
         onDoubleClick={() => toggle(g.key)}
-        className={`cursor-default border-t border-black/5 font-medium dark:border-white/5 ${active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5"}`}
+        className={`cursor-pointer border-t border-black/5 font-medium dark:border-white/5 ${active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5"}`}
       >
         <td className="truncate py-1.5 pl-3 pr-2">
           <button
@@ -228,7 +233,6 @@ export default function Processes() {
     ];
   };
 
-  const btn = "rounded-md px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10";
   const p = selectedProc;
   const locked = !!p?.protectedReason;
 
@@ -263,17 +267,23 @@ export default function Processes() {
             <span className="mr-2 max-w-56 truncate text-sm font-medium" title={p.path ?? undefined}>
               {p.name} <span className="font-normal opacity-60">· {p.pid}</span>
             </span>
-            <button type="button" className={btn} disabled={busy || !p.path} onClick={() => run("Mở vị trí", () => api.processOpenLocation(p))}>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={busyAction === "open"}
+              disabled={busy || !p.path}
+              onClick={() => run("open", "Mở vị trí", () => api.processOpenLocation(p))}
+            >
               Mở vị trí file
-            </button>
-            <button type="button" className={btn} disabled={busy || locked} onClick={() => trim(p)}>
+            </Button>
+            <Button variant="ghost" size="sm" loading={busyAction === "trim"} disabled={busy || locked} onClick={() => trim(p)}>
               Giảm RAM
-            </button>
+            </Button>
             <select
               value=""
               disabled={busy || locked}
               onChange={(e) => e.target.value && setPriority(p, e.target.value as PriorityClass)}
-              className="rounded-md bg-transparent px-2 py-1.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
+              className="h-8 cursor-pointer rounded-md bg-transparent px-2 text-sm transition hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/10"
             >
               <option value="">Ưu tiên: {p.priority ? PRIORITY_LABEL[p.priority] : "?"}</option>
               {(Object.keys(PRIORITY_LABEL) as PriorityClass[])
@@ -285,22 +295,30 @@ export default function Processes() {
                 ))}
             </select>
             {p.suspended ? (
-              <button type="button" className={btn} disabled={busy} onClick={() => run(`Tiếp tục ${p.name}`, () => api.processResume(p))}>
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={busyAction === "resume"}
+                disabled={busy}
+                onClick={() => run("resume", `Tiếp tục ${p.name}`, () => api.processResume(p))}
+              >
                 Tiếp tục
-              </button>
+              </Button>
             ) : (
-              <button type="button" className={btn} disabled={busy || locked} onClick={() => suspend(p)}>
+              <Button variant="ghost" size="sm" loading={busyAction === "suspend"} disabled={busy || locked} onClick={() => suspend(p)}>
                 Tạm dừng
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              className={`${btn} text-red-600 dark:text-red-400`}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-600 dark:text-red-400"
+              loading={busyAction === "kill"}
               disabled={busy || locked}
               onClick={() => killOne(p)}
             >
               Kết thúc
-            </button>
+            </Button>
             {locked && <span className="ml-2 text-xs opacity-60">🔒 {p.protectedReason}</span>}
           </>
         )}
@@ -309,17 +327,19 @@ export default function Processes() {
             <span className="mr-2 text-sm font-medium">
               {selectedGroup.name} <span className="font-normal opacity-60">· {selectedGroup.members.length} tiến trình</span>
             </span>
-            <button type="button" className={btn} onClick={() => toggle(selectedGroup.key)}>
+            <Button variant="ghost" size="sm" onClick={() => toggle(selectedGroup.key)}>
               {expanded.has(selectedGroup.key) ? "Thu gọn" : "Xem từng tiến trình"}
-            </button>
-            <button
-              type="button"
-              className={`${btn} text-red-600 dark:text-red-400`}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-600 dark:text-red-400"
+              loading={busyAction === "killGroup"}
               disabled={busy || selectedGroup.members.every((m) => m.protectedReason)}
               onClick={() => killGroup(selectedGroup)}
             >
               Kết thúc tất cả
-            </button>
+            </Button>
           </>
         )}
         {!p && !selectedGroup && <span className="text-sm opacity-50">Chọn một tiến trình để thao tác</span>}

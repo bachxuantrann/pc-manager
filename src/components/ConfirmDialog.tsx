@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import Button from "./Button";
 
 export interface ConfirmRequest {
   title: string;
@@ -29,19 +30,18 @@ export default function ConfirmDialog({ req, onClose }: { req: ConfirmRequest | 
         <h2 className="text-base font-semibold">{req.title}</h2>
         <div className="mt-2 text-sm opacity-80">{req.body}</div>
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-md px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10">
+          <Button variant="ghost" onClick={onClose}>
             Huỷ
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant={req.danger ? "danger" : "primary"}
             onClick={() => {
               onClose();
               req.onConfirm();
             }}
-            className={`rounded-md px-4 py-2 text-sm font-medium text-white ${req.danger ? "bg-red-600" : "bg-accent"}`}
           >
             {req.confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

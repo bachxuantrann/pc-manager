@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Button from "../components/Button";
 import { Notice } from "../components/Card";
 import { useWindowVisible } from "../hooks/useWindowVisible";
 import { api, errorMessage, type StartupEntry, type StartupSource } from "../lib/api";
@@ -40,7 +41,7 @@ function Toggle({ on, disabled, onChange }: { on: boolean; disabled?: boolean; o
         e.stopPropagation();
         onChange(!on);
       }}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${on ? "bg-accent" : "bg-black/20 dark:bg-white/20"}`}
+      className={`relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 ${on ? "bg-accent hover:bg-blue-700" : "bg-black/20 hover:bg-black/30 dark:bg-white/20 dark:hover:bg-white/30"}`}
     >
       <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
     </button>
@@ -70,6 +71,20 @@ export default function Startup() {
   }, []);
 
   useEffect(load, [load]);
+
+  const [reloading, setReloading] = useState(false);
+  const reload = () => {
+    setReloading(true);
+    polls.current = 0;
+    api
+      .startupList()
+      .then((l) => {
+        setEntries(l);
+        setError(null);
+      })
+      .catch((e) => setError(errorMessage(e)))
+      .finally(() => setReloading(false));
+  };
 
   // Publisher được kiểm tra nền: tải lại vài lần cho tới khi hết "Đang kiểm tra…".
   const pending = entries?.some((e) => e.publisher.status === "pending") ?? false;
@@ -162,9 +177,9 @@ export default function Startup() {
             Ẩn mục của Microsoft
           </label>
         )}
-        <button type="button" onClick={load} className="ml-auto rounded-md px-3 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/10">
-          ↻ Tải lại
-        </button>
+        <Button variant="ghost" size="sm" className="ml-auto" loading={reloading} onClick={reload}>
+          {!reloading && "↻ "}Tải lại
+        </Button>
       </div>
 
       <p className="mt-2 text-xs opacity-60">{TABS.find((t) => t.id === tab)?.hint}. Bật/tắt dùng cùng cơ chế với Task Manager, không xoá mục gốc.</p>
@@ -197,7 +212,7 @@ export default function Startup() {
                 <tr
                   key={e.id}
                   onClick={() => setOpen(expanded ? null : e.id)}
-                  className={`cursor-default border-t border-black/5 dark:border-white/5 ${expanded ? "bg-accent/10" : "hover:bg-black/5 dark:hover:bg-white/5"} ${e.enabled ? "" : "opacity-60"}`}
+                  className={`cursor-pointer border-t border-black/5 dark:border-white/5 ${expanded ? "bg-accent/10" : "hover:bg-black/5 dark:hover:bg-white/5"} ${e.enabled ? "" : "opacity-60"}`}
                 >
                   <td className="truncate py-2 pl-3 pr-2" title={e.name}>
                     <span className="mr-1 inline-block w-3 opacity-50">{expanded ? "▾" : "▸"}</span>

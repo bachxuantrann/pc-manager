@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import PageShell from "../components/PageShell";
-import BoostPanel from "../components/BoostPanel";
+import BoostPanel, { MEMORY_SETTINGS_CHANGED } from "../components/BoostPanel";
 import UsageChart from "../components/UsageChart";
 import { Card, Notice, Stat } from "../components/Card";
 import { useMemoryFeed } from "../hooks/useMemoryFeed";
@@ -52,6 +52,7 @@ function SmartSettings() {
     setErr(null);
     try {
       setS(await api.setMemorySettings(next));
+      window.dispatchEvent(new Event(MEMORY_SETTINGS_CHANGED));
       setSaved("Đã lưu");
       window.setTimeout(() => setSaved(null), 1500);
     } catch (e) {
