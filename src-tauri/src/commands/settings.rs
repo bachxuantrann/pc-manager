@@ -21,6 +21,8 @@ pub struct GeneralSettings {
     pub auto_rules: Vec<AutoRule>,
     pub whitelist: Vec<String>,
     pub autostart: bool,
+    /// Lý do không được bật khởi động cùng Windows (app không nằm trong Program Files).
+    pub autostart_blocked: Option<String>,
 }
 
 async fn blocking<T, F>(app: AppHandle, f: F) -> AppResult<T>
@@ -46,6 +48,7 @@ pub async fn settings_get(app: AppHandle) -> AppResult<GeneralSettings> {
                 .collect(),
             whitelist: settings::load_whitelist(&s.store),
             autostart: settings::autostart_enabled(),
+            autostart_blocked: settings::autostart_allowed().err(),
         })
     })
     .await

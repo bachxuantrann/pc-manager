@@ -370,6 +370,8 @@ export interface GeneralSettings {
   autoRules: { id: string; name: string; description: string }[];
   whitelist: string[];
   autostart: boolean;
+  /** Lý do không được bật khởi động cùng Windows (app không cài trong Program Files). */
+  autostartBlocked: string | null;
 }
 
 function channel<T>(cb: (v: T) => void): Channel<T> {

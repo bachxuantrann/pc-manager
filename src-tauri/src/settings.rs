@@ -147,9 +147,53 @@ pub fn autostart_enabled() -> bool {
     run_schtasks(&["/Query", "/TN", TASK_NAME]).is_ok_and(|o| o.status.success())
 }
 
+/// Bỏ tiền tố `\\?\` mà `canonicalize` thêm vào, giữ nguyên hoa/thường.
+fn norm_display(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_owned()
+}
+
+/// `exe` (đã chuẩn hoá) nằm BÊN TRONG một thư mục Program Files.
+fn inside_program_files(exe_normed: &str, program_files: &[String]) -> bool {
+    program_files
+        .iter()
+        .filter(|p| !p.trim().is_empty())
+        .map(|p| norm(p))
+        .any(|pf| exe_normed.strip_prefix(pf.as_str()).is_some_and(|rest| rest.starts_with('\\') && rest.len() > 1))
+}
+
+/// Task chạy exe với quyền admin mỗi lần đăng nhập, không hỏi UAC. Nếu exe nằm ở nơi
+/// người dùng thường ghi được (Desktop, Downloads, bản dev…), phần mềm độc hại có thể
+/// thay file exe để được chạy với quyền admin. Chỉ Program Files mới được bảo vệ
+/// (chỉ admin ghi được) — nên chỉ cho phép khi app được cài ở đó.
+/// `Err(lý do)` nếu không được phép.
+pub fn autostart_allowed() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("không xác định được vị trí app: {e}"))?;
+    // canonicalize: giải symlink/junction và tên 8.3 trước khi so đường dẫn.
+    let real = std::fs::canonicalize(&exe).map_err(|e| format!("không đọc được vị trí app: {e}"))?;
+    let pf: Vec<String> = ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"].iter().filter_map(|k| std::env::var(k).ok()).collect();
+    if inside_program_files(&norm(&real.to_string_lossy()), &pf) {
+        Ok(real)
+    } else {
+        Err(format!(
+            "PC Manager đang chạy từ {} — chỉ bật được khi app được cài vào Program Files (bằng bộ cài), \
+             vì task khởi động chạy với quyền Administrator mà không hỏi UAC.",
+            exe.parent().unwrap_or(&exe).display()
+        ))
+    }
+}
+
 pub fn set_autostart(store: &Store, enabled: bool) -> AppResult<bool> {
     let result = if enabled {
-        let exe = std::env::current_exe()?;
+        let exe = match autostart_allowed() {
+            Ok(p) => p,
+            Err(why) => {
+                store.log_action_best_effort("settings.autostart", TASK_NAME, false, &why);
+                return Err(AppError::Forbidden(why));
+            }
+        };
+        // Dùng đường dẫn thật (không còn tiền tố \\?\) cho Task Scheduler.
+        let exe = PathBuf::from(norm_display(&exe));
         let tr = format!("\"{}\" {TRAY_ARG}", exe.display());
         run_schtasks(&["/Create", "/TN", TASK_NAME, "/TR", &tr, "/SC", "ONLOGON", "/RL", "HIGHEST", "/IT", "/F"])
     } else {
@@ -168,6 +212,21 @@ pub fn set_autostart(store: &Store, enabled: bool) -> AppResult<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn autostart_only_from_program_files() {
+        let pf = vec![r"C:\Program Files".to_owned(), r"C:\Program Files (x86)".to_owned(), String::new()];
+        let ok = |p: &str| inside_program_files(&norm(p), &pf);
+        assert!(ok(r"C:\Program Files\PC Manager\pc-manager.exe"));
+        assert!(ok(r"\\?\C:\PROGRAM FILES (X86)\PC Manager\pc-manager.exe"));
+        assert!(!ok(r"C:\Users\An\Desktop\pc-manager\src-tauri\target\release\pc-manager.exe"));
+        assert!(!ok(r"C:\Program FilesEvil\pc-manager.exe"), "phải đúng ranh giới thư mục");
+        assert!(!ok(r"C:\Program Files"), "không phải chính thư mục gốc");
+        assert!(!ok(r"D:\Program Files\PC Manager\pc-manager.exe"));
+        assert_eq!(norm_display(Path::new(r"\\?\C:\Program Files\PC Manager\a.exe")), r"C:\Program Files\PC Manager\a.exe");
+        // Bản test đang chạy từ target\ => không được phép.
+        assert!(autostart_allowed().is_err());
+    }
 
     #[test]
     fn whitelist_validation() {

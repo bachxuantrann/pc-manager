@@ -165,12 +165,22 @@ function AutostartSettings({ s, onChange }: { s: GeneralSettings; onChange: (s: 
   return (
     <div className="grid gap-2 text-sm">
       <label className="flex cursor-pointer items-center gap-2">
-        <input type="checkbox" className="accent-[var(--color-accent)]" checked={s.autostart} disabled={busy} onChange={(e) => set(e.target.checked)} />
+        <input
+          type="checkbox"
+          className="accent-[var(--color-accent)]"
+          checked={s.autostart}
+          // Luôn cho TẮT; chỉ cho BẬT khi app được cài trong Program Files.
+          disabled={busy || (!s.autostart && !!s.autostartBlocked)}
+          onChange={(e) => set(e.target.checked)}
+        />
         Khởi động cùng Windows (chạy ẩn ở khay hệ thống)
       </label>
       <p className="text-xs opacity-60">
-        Dùng Task Scheduler với quyền cao nhất — vì PC Manager cần quyền Administrator, cách "Run" thông thường sẽ bị UAC chặn.
+        Dùng Task Scheduler với quyền cao nhất — vì PC Manager cần quyền Administrator, cách "Run" thông thường sẽ bị UAC chặn. App
+        sẽ chạy với quyền Administrator mà không hỏi lại, nên chỉ được bật khi PC Manager được cài trong Program Files (chỉ admin mới
+        sửa được file ở đó).
       </p>
+      {s.autostartBlocked && <Notice tone="warn">{s.autostartBlocked}</Notice>}
       {err && <Notice tone="error">{err}</Notice>}
     </div>
   );
