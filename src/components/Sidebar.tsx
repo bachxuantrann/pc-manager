@@ -5,6 +5,7 @@ export type PageId =
   | "processes"
   | "startup"
   | "apps"
+  | "disk"
   | "settings";
 
 const ITEMS: { id: PageId; label: string; icon: string }[] = [
@@ -14,6 +15,7 @@ const ITEMS: { id: PageId; label: string; icon: string }[] = [
   { id: "processes", label: "Tiến trình", icon: "≡" },
   { id: "startup", label: "Khởi động", icon: "⏻" },
   { id: "apps", label: "Ứng dụng", icon: "▦" },
+  { id: "disk", label: "Ổ đĩa", icon: "◫" },
   { id: "settings", label: "Cài đặt", icon: "⚙" },
 ];
 

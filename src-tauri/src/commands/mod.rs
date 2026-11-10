@@ -2,8 +2,10 @@
 
 pub mod apps;
 pub mod cleaner;
+pub mod disk;
 pub mod memory;
 pub mod process;
+pub mod settings;
 pub mod startup;
 
 use serde::Serialize;

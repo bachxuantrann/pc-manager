@@ -38,7 +38,7 @@ function Composition({ s }: { s: MemoryStatus }) {
   );
 }
 
-function SmartSettings() {
+export function SmartSettings() {
   const [s, setS] = useState<MemorySettings | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);

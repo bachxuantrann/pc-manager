@@ -3,14 +3,19 @@
 //! CLAUDE.md: giới hạn rayon pool = max(2, cpus/2), mỗi thread ở chế độ
 //! THREAD_MODE_BACKGROUND (CPU + I/O ưu tiên thấp) để không làm giật máy.
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use crate::error::{AppError, AppResult};
 use crate::sys;
 
-static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+static POOL: OnceLock<Arc<rayon::ThreadPool>> = OnceLock::new();
 
 pub fn pool() -> AppResult<&'static rayon::ThreadPool> {
+    shared().map(|p| &**p)
+}
+
+/// Pool dưới dạng `Arc` (jwalk cần để chạy trên pool có sẵn).
+pub fn shared() -> AppResult<&'static Arc<rayon::ThreadPool>> {
     if let Some(p) = POOL.get() {
         return Ok(p);
     }
@@ -21,5 +26,5 @@ pub fn pool() -> AppResult<&'static rayon::ThreadPool> {
         .start_handler(|_| sys::process::enter_background_mode())
         .build()
         .map_err(|e| AppError::Other(format!("không tạo được thread pool: {e}")))?;
-    Ok(POOL.get_or_init(|| pool))
+    Ok(POOL.get_or_init(|| Arc::new(pool)))
 }

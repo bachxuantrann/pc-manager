@@ -11,6 +11,7 @@
 pub mod bg;
 pub mod commands;
 pub mod error;
+pub mod settings;
 pub mod state;
 pub mod sys;
 mod tray;
@@ -68,6 +69,32 @@ fn spawn_usage_sampler(app: AppHandle) {
         .unwrap_or_else(|e| eprintln!("không tạo được thread usage sampler: {e}"));
 }
 
+/// Kiểm tra lịch dọn tự động mỗi 30 phút (rất nhẹ: chỉ đọc 1 dòng SQLite).
+const AUTO_CLEAN_CHECK: Duration = Duration::from_secs(30 * 60);
+
+fn spawn_auto_clean(app: AppHandle) {
+    std::thread::Builder::new()
+        .name("auto-clean".into())
+        .spawn(move || loop {
+            std::thread::sleep(AUTO_CLEAN_CHECK);
+            let state = app.state::<AppState>();
+            let mut cfg = settings::AutoClean::load(&state.store);
+            if !cfg.due(settings::now_ms()) {
+                continue;
+            }
+            let result = state.cleaner.auto_clean(&state.store, &cfg.rule_ids);
+            let detail = match &result {
+                Ok(r) => format!("{} file, {} byte", r.deleted_files, r.freed_bytes),
+                Err(e) => e.to_string(),
+            };
+            state.store.log_action_best_effort("cleaner.auto", &cfg.rule_ids.join(","), result.is_ok(), &detail);
+            cfg.last_run_ms = Some(settings::now_ms());
+            let _ = cfg.save(&state.store);
+        })
+        .map(|_| ())
+        .unwrap_or_else(|e| eprintln!("không tạo được thread auto clean: {e}"));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let result = tauri::Builder::default()
@@ -77,6 +104,13 @@ pub fn run() {
             tray::setup(app.handle())?;
             spawn_auto_smart_boost(app.handle().clone());
             spawn_usage_sampler(app.handle().clone());
+            spawn_auto_clean(app.handle().clone());
+            // Khởi động cùng Windows (task với --tray): chạy ẩn ở khay hệ thống.
+            if std::env::args().any(|a| a == settings::TRAY_ARG) {
+                if let Some(w) = app.get_webview_window(tray::MAIN_WINDOW) {
+                    let _ = w.hide();
+                }
+            }
             Ok(())
         })
         // Bấm X => ẩn xuống tray thay vì thoát. Thoát qua menu tray.
@@ -112,6 +146,15 @@ pub fn run() {
             commands::apps::apps_uninstall,
             commands::apps::apps_leftovers_scan,
             commands::apps::apps_leftovers_clean,
+            commands::disk::disk_drives,
+            commands::disk::disk_scan_large,
+            commands::disk::disk_scan_duplicates,
+            commands::disk::disk_cancel,
+            commands::disk::disk_recycle,
+            commands::settings::settings_get,
+            commands::settings::settings_set_auto_clean,
+            commands::settings::settings_set_whitelist,
+            commands::settings::settings_set_autostart,
         ])
         .build(tauri::generate_context!());
 

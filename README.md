@@ -25,6 +25,7 @@ bằng "Run as administrator" — mỗi lần chạy Windows hiện UAC để b�
 .\scripts\admin-test.ps1                 # toàn bộ test, kể cả test #[ignore] cần admin
 .\scripts\admin-test.ps1 -Filter memory  # chỉ test có "memory" trong tên
 .\scripts\admin-test.ps1 -Mode dev       # mở `npm run tauri dev` trong cửa sổ admin
+.\scripts\admin-test.ps1 -Mode ram       # đo RAM bản release khi rảnh (cần `npm run tauri build` trước)
 ```
 Log nằm ở `src-tauri/target/admin-test.log`.
 

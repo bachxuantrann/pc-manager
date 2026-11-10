@@ -294,6 +294,84 @@ export interface LeftoverReport {
   items: { id: number; ok: boolean; message: string | null }[];
 }
 
+// ---- Disk -----------------------------------------------------------------
+
+export interface DriveInfo {
+  root: string;
+  kind: "fixed" | "removable" | "network" | "cdRom" | "ramDisk" | "unknown";
+  label: string;
+  fs: string;
+  total: number;
+  free: number;
+}
+
+export interface FileItem {
+  id: number;
+  path: string;
+  size: number;
+  modifiedMs: number | null;
+  /** Không được chuyển vào Thùng rác (file hệ thống, thư mục cài app…). */
+  blocked: string | null;
+  /** Được phép nhưng nên cân nhắc. */
+  warning: string | null;
+}
+
+export interface LargeScan {
+  scanId: number;
+  root: string;
+  files: FileItem[];
+  scannedFiles: number;
+  scannedBytes: number;
+  durationMs: number;
+  cancelled: boolean;
+}
+
+export interface DupGroup {
+  size: number;
+  files: FileItem[];
+}
+
+export interface DupScan {
+  scanId: number;
+  root: string;
+  groups: DupGroup[];
+  wastedBytes: number;
+  scannedFiles: number;
+  durationMs: number;
+  cancelled: boolean;
+}
+
+export interface DiskProgress {
+  phase: "walk" | "head" | "full";
+  files: number;
+  bytes: number;
+  done: number;
+  total: number;
+}
+
+export interface RecycleReport {
+  recycled: number;
+  recycledBytes: number;
+  failed: number;
+  items: { id: number; ok: boolean; message: string | null }[];
+}
+
+// ---- Settings ---------------------------------------------------------------
+
+export interface AutoClean {
+  enabled: boolean;
+  intervalDays: number;
+  ruleIds: string[];
+  lastRunMs: number | null;
+}
+
+export interface GeneralSettings {
+  autoClean: AutoClean;
+  autoRules: { id: string; name: string; description: string }[];
+  whitelist: string[];
+  autostart: boolean;
+}
+
 function channel<T>(cb: (v: T) => void): Channel<T> {
   const ch = new Channel<T>();
   ch.onmessage = cb;
@@ -350,6 +428,21 @@ export const api = {
 
   onUninstallFinished: (cb: (e: UninstallFinished) => void): Promise<UnlistenFn> =>
     listen<UninstallFinished>("apps://uninstall-finished", (e) => cb(e.payload)),
+
+  diskDrives: () => invoke<DriveInfo[]>("disk_drives"),
+  diskScanLarge: (root: string, minBytes: number, onProgress: (p: DiskProgress) => void) =>
+    invoke<LargeScan>("disk_scan_large", { root, minBytes, onProgress: channel(onProgress) }),
+  diskScanDuplicates: (root: string, minBytes: number, onProgress: (p: DiskProgress) => void) =>
+    invoke<DupScan>("disk_scan_duplicates", { root, minBytes, onProgress: channel(onProgress) }),
+  diskCancel: () => invoke<void>("disk_cancel"),
+  /** Chỉ gửi scanId + id file — backend chuyển vào Thùng rác (khôi phục được). */
+  diskRecycle: (scanId: number, fileIds: number[]) => invoke<RecycleReport>("disk_recycle", { scanId, fileIds }),
+
+  settingsGet: () => invoke<GeneralSettings>("settings_get"),
+  settingsSetAutoClean: (enabled: boolean, intervalDays: number, ruleIds: string[]) =>
+    invoke<AutoClean>("settings_set_auto_clean", { enabled, intervalDays, ruleIds }),
+  settingsSetWhitelist: (paths: string[]) => invoke<string[]>("settings_set_whitelist", { paths }),
+  settingsSetAutostart: (enabled: boolean) => invoke<boolean>("settings_set_autostart", { enabled }),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

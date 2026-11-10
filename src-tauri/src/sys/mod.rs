@@ -3,6 +3,7 @@
 #![allow(unsafe_code)]
 
 pub mod com;
+pub mod disk;
 pub mod handle;
 pub mod memory;
 mod ntdll;

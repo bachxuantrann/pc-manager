@@ -157,6 +157,48 @@ impl CleanerManager {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
+    /// Rule đủ an toàn để dọn tự động theo lịch: rủi ro thấp, không dừng service,
+    /// không phải Thùng rác. Trả về (id, tên, mô tả).
+    pub fn auto_eligible(&self) -> Vec<(String, String, String)> {
+        self.rules
+            .iter()
+            .filter(|r| r.risk == Risk::Low && r.service.is_none() && r.kind == RuleKind::Files)
+            .map(|r| (r.id.clone(), r.name.clone(), r.description.clone()))
+            .collect()
+    }
+
+    /// Dọn tự động: quét rồi dọn ngay các rule `rule_ids` (chỉ rule hợp lệ cho auto,
+    /// đã bật trong Cài đặt — đó là bước người dùng xác nhận). Mọi lớp an toàn
+    /// (tuổi file, file bị khoá, danh sách cấm/bảo vệ, link) vẫn áp dụng.
+    pub fn auto_clean(&self, store: &Store, rule_ids: &[String]) -> AppResult<CleanReport> {
+        let eligible: Vec<String> = self.auto_eligible().into_iter().map(|(id, _, _)| id).collect();
+        let scan = self.scan(&|_| {})?;
+        let ids: Vec<String> = scan
+            .rules
+            .iter()
+            .filter(|r| matches!(r.status, RuleStatus::Ready) && rule_ids.contains(&r.id) && eligible.contains(&r.id))
+            .map(|r| r.id.clone())
+            .collect();
+        if ids.is_empty() {
+            // Không có gì để dọn — bỏ kết quả quét.
+            if let Ok(mut l) = self.last.lock() {
+                l.take();
+            }
+            return Ok(CleanReport {
+                dry_run: false,
+                rules: Vec::new(),
+                freed_bytes: 0,
+                deleted_files: 0,
+                skipped_locked: 0,
+                skipped_changed: 0,
+                errors: 0,
+                duration_ms: scan.duration_ms,
+                cancelled: false,
+            });
+        }
+        self.clean(store, scan.scan_id, &ids, false, &|_| {})
+    }
+
     /// Pool nền dùng chung (max(2, cpus/2) thread ưu tiên thấp).
     fn pool(&self) -> AppResult<&'static rayon::ThreadPool> {
         crate::bg::pool()

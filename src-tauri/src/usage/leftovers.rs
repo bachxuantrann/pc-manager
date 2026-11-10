@@ -209,6 +209,9 @@ impl Guard {
         }
         let s = norm(&path.to_string_lossy());
         let name = s.rsplit('\\').next().unwrap_or_default();
+        if crate::settings::is_protected(&s) {
+            return Some("nằm trong danh sách bảo vệ của bạn");
+        }
         if SHARED_DIRS.contains(&name) {
             return Some("thư mục dùng chung");
         }

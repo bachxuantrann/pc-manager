@@ -170,6 +170,9 @@ impl BanList {
             return Some("gốc ổ đĩa");
         }
         let s = norm(&path.to_string_lossy());
+        if crate::settings::is_protected(&s) {
+            return Some("nằm trong danh sách bảo vệ của bạn");
+        }
         let parent = path.parent().map(|p| norm(&p.to_string_lossy())).unwrap_or_default();
         for (base, why) in &self.under {
             if s == *base || s.strip_prefix(base.as_str()).is_some_and(|rest| rest.starts_with('\\')) {

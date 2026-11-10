@@ -7,6 +7,7 @@ import Cleaner from "./pages/Cleaner";
 import Processes from "./pages/Processes";
 import Startup from "./pages/Startup";
 import Apps from "./pages/Apps";
+import Disk from "./pages/Disk";
 import Settings from "./pages/Settings";
 
 const PAGES: Record<PageId, () => JSX.Element> = {
@@ -16,6 +17,7 @@ const PAGES: Record<PageId, () => JSX.Element> = {
   processes: Processes,
   startup: Startup,
   apps: Apps,
+  disk: Disk,
   settings: Settings,
 };
 

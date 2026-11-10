@@ -11,9 +11,10 @@
   .\scripts\admin-test.ps1                 # cargo test --include-ignored (toàn bộ test, kể cả test cần admin)
   .\scripts\admin-test.ps1 -Filter memory  # chỉ test có "memory" trong tên
   .\scripts\admin-test.ps1 -Mode dev       # mở `npm run tauri dev` trong cửa sổ admin riêng
+  .\scripts\admin-test.ps1 -Mode ram       # chạy bản release ẩn ở tray 30s rồi đo RAM khi rảnh
 #>
 param(
-    [ValidateSet("test", "dev")] [string] $Mode = "test",
+    [ValidateSet("test", "dev", "ram")] [string] $Mode = "test",
     [string] $Filter = "",
     [switch] $Elevated  # dùng nội bộ khi script tự mở lại chính nó
 )
@@ -38,6 +39,35 @@ if (Test-Admin) {
         Write-Host "PC Manager dev (Administrator) — đóng cửa sổ này để dừng." -ForegroundColor Green
         npm run tauri dev
         return
+    }
+
+    if ($Mode -eq "ram") {
+        # Đo RAM khi rảnh: bản release, chạy ẩn ở tray (--tray), chờ 30s cho ổn định.
+        $exe = Join-Path $tauri "target\release\pc-manager.exe"
+        if (-not (Test-Path $exe)) { "Chưa có $exe — chạy 'npm run tauri build' trước." | Out-File $log -Encoding utf8; exit 2 }
+        $p = Start-Process $exe -ArgumentList "--tray" -PassThru
+        Start-Sleep -Seconds 30
+        $p.Refresh()
+        # Mọi tiến trình con cháu (WebView2) của app.
+        $all = Get-CimInstance Win32_Process
+        $ids = @($p.Id); $added = $true
+        while ($added) {
+            $added = $false
+            foreach ($x in $all) { if ($ids -contains $x.ParentProcessId -and $ids -notcontains $x.ProcessId) { $ids += $x.ProcessId; $added = $true } }
+        }
+        $kids = $ids | Where-Object { $_ -ne $p.Id } | ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+        $mb = { param($v) [math]::Round($v / 1MB, 1) }
+        $lines = @(
+            "PC Manager release — RAM khi rảnh (ẩn ở tray, sau 30 giây)",
+            ("Tiến trình Rust pc-manager.exe: Working set {0} MB, Private {1} MB" -f (& $mb $p.WorkingSet64), (& $mb $p.PrivateMemorySize64)),
+            ("WebView2 ({0} tiến trình con): Working set {1} MB, Private {2} MB" -f $kids.Count, (& $mb (($kids | Measure-Object WorkingSet64 -Sum).Sum)), (& $mb (($kids | Measure-Object PrivateMemorySize64 -Sum).Sum)))
+        )
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        $kids | Stop-Process -Force -ErrorAction SilentlyContinue
+        $lines += "`n=== ADMIN-TEST EXIT CODE: 0 ==="
+        $lines | Out-File $log -Encoding utf8
+        if (-not $Elevated) { Get-Content $log -Encoding utf8 }
+        exit 0
     }
 
     Set-Location $tauri
@@ -65,7 +95,7 @@ if ($Mode -eq "dev") {
 
 Write-Host "Cần quyền Administrator — hãy bấm Yes ở hộp UAC…" -ForegroundColor Yellow
 if (Test-Path $log) { Remove-Item $log -Force }
-$argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"", "-Mode", "test", "-Elevated")
+$argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"", "-Mode", $Mode, "-Elevated")
 if ($Filter) { $argList += @("-Filter", $Filter) }
 try {
     $p = Start-Process powershell -Verb RunAs -WindowStyle Minimized -ArgumentList $argList -Wait -PassThru
