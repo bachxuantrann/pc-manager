@@ -1,8 +1,9 @@
 # An toàn và quyền Administrator
 
+[English](SAFETY.md) · [Tiếng Việt](AN-TOAN.md)
+
 PC Manager đụng tới file, tiến trình, registry và dịch vụ của Windows. Tài liệu này mô tả
-**app được làm gì, không được làm gì**, và các lớp bảo vệ trong code. Quy tắc gốc cho người
-phát triển nằm ở [CLAUDE.md](../CLAUDE.md) (mục "AN TOÀN").
+**app được làm gì, không được làm gì**, và các lớp bảo vệ trong code.
 
 ## 1. Mô hình quyền
 
@@ -127,6 +128,6 @@ Nói thẳng để không kỳ vọng sai:
 ## 8. Giới hạn đã biết
 
 - Bộ cài **không có chữ ký số từ nhà cung cấp chứng chỉ**. Windows SmartScreen và phần mềm
-  diệt virus có thể cảnh báo; xem mục cài đặt trong [README](../README.md).
+  diệt virus có thể cảnh báo; xem mục cài đặt trong [README](../README.vi.md#cài-đặt).
 - Chỉ hỗ trợ Windows 10/11 x64.
 - Test cần quyền admin chạy bằng `scripts/admin-test.ps1` (Windows hỏi UAC mỗi lần).

@@ -1,165 +1,197 @@
+<div align="center">
+
+<img src="app-icon.svg" width="96" alt="PC Manager logo">
+
 # PC Manager
 
-<img src="app-icon.svg" width="72" align="right" alt="">
+**A lightweight, safety-first maintenance tool for Windows 10 and 11.**
 
-Tiện ích nhẹ để chăm sóc máy Windows 10/11: theo dõi RAM, dọn rác, quản lý tiến trình và ứng dụng
-khởi động, tìm app lâu không dùng, file lớn và file trùng. Viết bằng Tauri 2 + React + Rust.
+Monitor memory, clean junk files, manage processes and startup apps, find unused apps,<br>
+large files and duplicates — in a 2.5 MB installer that idles at a few megabytes of RAM.
 
-- **Nhẹ:** bộ cài ~2.5 MB; chạy ngầm ở khay hệ thống chỉ ~2–15 MB RAM. Đóng cửa sổ là giải
-  phóng hẳn phần giao diện.
-- **An toàn:** chỉ xoá theo quy tắc cố định, luôn cho xem trước, file người dùng chọn chỉ vào
-  Thùng rác, mọi thao tác đều được ghi nhật ký. Chi tiết: [docs/AN-TOAN.md](docs/AN-TOAN.md).
-- **Không đòi quyền admin khi mở:** chức năng nào cần thì mới hỏi.
+[![Release](https://img.shields.io/github/v/release/bachxuantrann/pc-manager?label=release)](https://github.com/bachxuantrann/pc-manager/releases/latest)
+[![CI](https://github.com/bachxuantrann/pc-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/bachxuantrann/pc-manager/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+![Platform: Windows 10/11 x64](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078D4)
 
-![Tổng quan](docs/screenshots/dashboard.png)
+**English** · [Tiếng Việt](README.vi.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
+</div>
+
+![PC Manager dashboard](docs/screenshots/dashboard.png)
+
+> The app's interface is currently in Vietnamese. This documentation is available in several languages.
+
+## Contents
+
+- [Highlights](#highlights)
+- [Features](#features)
+- [Installation](#installation)
+- [Administrator rights](#administrator-rights)
+- [Safety](#safety)
+- [How memory Boost works](#how-memory-boost-works)
+- [FAQ](#faq)
+- [Building from source](#building-from-source)
+- [License](#license)
+
+## Highlights
+
+- **Lightweight.** ~2.5 MB installer. In the system tray the app uses roughly 2–15 MB of RAM;
+  closing the window releases the UI engine entirely.
+- **Safe by design.** Deletes only what fixed rules allow, always shows a preview first,
+  sends anything you pick by hand to the Recycle Bin, and logs every change.
+- **No admin prompt on launch.** Runs as a standard user and asks for elevation only when a
+  feature actually needs it.
+- **Honest.** Reports the real gain of every action instead of inflated "freed" numbers.
+
+## Features
+
+| Area | What it does |
+|---|---|
+| **Dashboard and memory** | Live RAM usage, available and standby memory, 60-second history; Boost, Smart Boost and Deep Boost |
+| **Junk cleaner** | Temp files, browser caches, crash dumps, logs, Windows Update cache, Recycle Bin. Preview before cleaning, dry-run mode. Deep clean of WinSxS (via DISM) and `Windows.old` (via Disk Cleanup) |
+| **Processes** | CPU and memory per process, publisher (digital signature), end, suspend and resume, priority, trim working set, open file location |
+| **Startup apps** | Registry, Startup folders, scheduled tasks and services; enable or disable the same way Task Manager does |
+| **Installed apps** | Size, install date and last-used date; filter apps you have not used for months; uninstall, then clean up leftovers |
+| **Disk** | Drive usage, largest files, content-identical duplicates (BLAKE3); remove to the Recycle Bin |
+| **Settings** | Smart Boost threshold, scheduled cleaning, start with Windows, protected folders, activity log |
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/cleaner.png" alt="Dọn rác: xem trước theo quy tắc"></td>
-    <td><img src="docs/screenshots/disk.png" alt="Ổ đĩa: file trùng, ẩn file rủi ro"></td>
+    <td><img src="docs/screenshots/cleaner.png" alt="Junk cleaner with preview"></td>
+    <td><img src="docs/screenshots/disk.png" alt="Duplicate finder"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/apps.png" alt="Ứng dụng: lần dùng cuối, gỡ cài đặt, dọn sót"></td>
-    <td><img src="docs/screenshots/settings.png" alt="Cài đặt: Smart Boost, lịch dọn, thư mục bảo vệ, nhật ký"></td>
+    <td><img src="docs/screenshots/apps.png" alt="Installed apps with last-used date"></td>
+    <td><img src="docs/screenshots/settings.png" alt="Settings and activity log"></td>
   </tr>
 </table>
 
-<sub>Ảnh chụp bằng dữ liệu giả (chế độ demo), không phải dữ liệu máy thật.</sub>
+<sub>Screenshots use demo data, not data from a real machine.</sub>
 
-## Tính năng
+## Installation
 
-| Trang | Làm được gì |
+1. Download `PC-Manager_<version>_x64-setup.exe` from the
+   [latest release](https://github.com/bachxuantrann/pc-manager/releases/latest).
+2. Run the installer. It installs to `Program Files` and asks for administrator approval once.
+3. The installer is **self-signed**, not signed by a certificate authority that Windows trusts,
+   so Microsoft Defender SmartScreen may show *"Windows protected your PC"*.
+   Choose **More info → Run anyway**. Each release lists the installer's SHA-256 checksum so you
+   can verify the download, or you can [build it yourself](#building-from-source).
+
+**Requirements:** Windows 10 or 11 (x64) and the Microsoft Edge WebView2 Runtime, which ships
+with Windows 11 and is downloaded automatically by the installer if missing.
+
+**Updating:** run the new installer over the existing one; settings and the activity log are kept.
+**Uninstalling:** use *Settings → Apps* like any other app. The start-with-Windows task, if
+enabled, is removed as well.
+
+## Administrator rights
+
+| How it runs | Rights |
 |---|---|
-| Tổng quan, Bộ nhớ | RAM đang dùng / khả dụng / standby, biểu đồ 60 giây; Boost nhẹ, Smart Boost, Boost sâu |
-| Dọn rác | Quét file tạm, cache trình duyệt, crash dump, log, Windows Update cache, Thùng rác; xem trước rồi mới dọn; chạy thử; dọn sâu WinSxS (DISM) và Windows.old (Disk Cleanup) |
-| Tiến trình | CPU/RAM, nhà phát hành (chữ ký số), kết thúc, tạm dừng, đổi ưu tiên, thu gọn bộ nhớ, mở vị trí file |
-| Khởi động | App chạy cùng Windows (registry, thư mục Startup, scheduled task, service); bật/tắt giống Task Manager |
-| Ứng dụng | App đã cài, dung lượng, lần dùng cuối; lọc app lâu không dùng; gỡ cài đặt rồi tự dọn phần còn sót |
-| Ổ đĩa | Dung lượng các ổ, file lớn nhất, file trùng nội dung (blake3); chuyển vào Thùng rác |
-| Cài đặt | Ngưỡng Smart Boost, lịch dọn tự động, khởi động cùng Windows, thư mục bảo vệ, nhật ký thao tác |
+| Normal launch | Standard user, no UAC prompt |
+| **Run as administrator** button (sidebar, or next to a feature that needs it) | Administrator, after a UAC prompt; reopens on the same page |
+| Start with Windows (optional) | Administrator without prompting — can only be enabled when the app is installed in `Program Files` |
 
-## Cài đặt
+Features that need administrator rights: memory Boost, cleaning system locations
+(`Windows\Temp`, system crash dumps, Windows Update cache), reading Prefetch, changing
+machine-wide startup entries, acting on system processes, uninstalling machine-wide apps,
+and WinSxS cleanup. Everything else works without elevation.
 
-1. Tải `PC Manager_x.y.z_x64-setup.exe` ở mục [Releases](https://github.com/bachxuantrann/pc-manager/releases).
-2. Chạy bộ cài (cài vào `Program Files`, Windows hỏi UAC).
-3. Bộ cài **chỉ ký bằng chứng chỉ tự ký**, không phải chứng chỉ của nhà cung cấp được Windows
-   tin cậy. Vì vậy Windows SmartScreen có thể hiện "Windows protected your PC": bấm
-   **More info → Run anyway**. Nếu không yên tâm, bạn có thể tự build từ mã nguồn (bên dưới).
-4. Cần Microsoft Edge WebView2 Runtime (có sẵn trên Windows 11; bộ cài tự tải nếu thiếu).
+## Safety
 
-Gỡ cài đặt trong Settings → Apps như mọi app khác; task khởi động cùng Windows (nếu đã bật)
-được xoá theo.
+PC Manager touches files, processes, the registry and services, so every destructive path is
+guarded in code. Summary below; full details in **[docs/SAFETY.md](docs/SAFETY.md)**.
 
-## Quyền Administrator
+- **Rule-based cleaning only.** The cleaner deletes files matching fixed rules in
+  [`rules/cleaner.toml`](rules/cleaner.toml), compiled into the app. No command accepts an
+  arbitrary path from the UI for deletion.
+- **Scan → preview → confirm → delete**, with a dry-run mode.
+- **Never follows** symlinks, junctions or reparse points; skips locked files, files newer than
+  the rule's age threshold, and files changed after the scan.
+- **Hard block list:** `System32`, `SysWOW64`, `WinSxS` (cleaned only through DISM), `Prefetch`,
+  the user-profile root, personal folders (Documents, Desktop, Pictures…), `Program Files`,
+  and every drive root. You can add your own **protected folders**.
+- **Recycle Bin, not permanent deletion,** for large and duplicate files and for leftovers
+  after uninstalling an app. Registry keys are exported to a `.reg` backup before removal.
+- **Critical processes are protected** (`csrss`, `wininit`, `winlogon`, `lsass`, `smss`,
+  `services`, System). Disabling a startup entry never deletes the original.
+- **Every change is logged** locally and visible under *Settings → Activity log*.
+- **Tested.** 140+ automated tests, including sandboxed tests of the file-selection logic
+  (junctions, locked files, young files, blocked folders, files modified after a scan),
+  run on every push.
 
-| Cách chạy | Quyền |
-|---|---|
-| Mở app bình thường | Quyền thường, không hỏi UAC |
-| Bấm **"Chạy với quyền Administrator"** (sidebar hoặc ngay chỗ cần) | Admin; app mở lại qua UAC, đúng trang đang xem |
-| Khởi động cùng Windows | Admin, không hỏi lại (chỉ bật được khi app nằm trong Program Files) |
+To report a security issue, see [SECURITY.md](SECURITY.md).
 
-Cần quyền admin cho: Boost RAM, dọn file hệ thống (Windows\Temp, crash dump, Windows Update…),
-đọc Prefetch, bật/tắt mục khởi động của cả máy, thao tác tiến trình của hệ thống, gỡ app cài
-cho cả máy, dọn WinSxS.
+## How memory Boost works
 
-## An toàn
+Windows already manages memory well, so PC Manager does not promise miracles:
 
-Tóm tắt (đầy đủ ở [docs/AN-TOAN.md](docs/AN-TOAN.md)):
+- **Boost (recommended)** writes pending modified pages to disk and drops *low-priority*
+  standby cache. Cache of apps you use often is kept.
+- **Deep Boost** drops the *entire* standby cache. "Free" memory jumps, but **available memory
+  barely changes** (standby cache already counts as available) and apps load more slowly the
+  next time. Use it only when you have a specific reason.
+- **Smart Boost** runs only when available memory falls below a threshold (15% by default).
+- Every result separates **"available memory gained"** (the real benefit) from
+  **"cache cleared"**.
+- **Trim working set** applies only to processes you select, never in bulk.
 
-- Dọn rác **chỉ xoá file khớp quy tắc cố định** trong [`rules/cleaner.toml`](rules/cleaner.toml),
-  không có lệnh nào nhận đường dẫn tuỳ ý để xoá.
-- Luôn **quét → xem trước → xác nhận → xoá**; có **chạy thử (dry-run)**.
-- Không đi theo symlink/junction; bỏ qua file đang khoá, file mới, file thay đổi sau khi quét.
-- **Danh sách cấm cứng:** System32, SysWOW64, WinSxS (chỉ dọn qua DISM), Prefetch, gốc thư mục
-  người dùng, Documents/Desktop/Pictures…, Program Files, gốc mọi ổ đĩa. Bạn có thể tự thêm
-  **thư mục bảo vệ**.
-- File lớn/trùng và phần còn sót sau khi gỡ app **chỉ vào Thùng rác**; key registry được sao lưu
-  `.reg` trước khi xoá.
-- Không cho kết thúc tiến trình hệ thống quan trọng; tắt mục khởi động không xoá mục gốc.
-- Mọi thao tác thay đổi hệ thống được ghi nhật ký (Cài đặt → Nhật ký thao tác).
-- Có 140+ test tự động, gồm test hộp cát cho logic chọn file xoá (junction, file khoá, file mới,
-  thư mục cấm, file đổi sau khi quét).
+## FAQ
 
-## Boost RAM thực sự làm gì
+<details>
+<summary><b>Why doesn't PC Manager appear under Task Manager → Startup apps?</b></summary>
 
-Windows quản lý bộ nhớ khá tốt, nên PC Manager không hứa "tăng tốc thần kỳ":
+Start with Windows uses a Task Scheduler task with highest privileges, because a regular
+`Run` registry entry cannot start an app with administrator rights without a UAC prompt.
+Task Manager does not list scheduled tasks. You will find it as **PC Manager Autostart** in
+Task Scheduler, and on PC Manager's own *Startup* page.
+</details>
 
-- **Boost (khuyên dùng):** ghi dữ liệu chờ ra đĩa và xoá cache ưu tiên thấp; giữ cache của app
-  hay dùng.
-- **Boost sâu:** xoá toàn bộ cache standby. RAM "trống" tăng mạnh nhưng **RAM khả dụng gần như
-  không đổi**, và app mở lần sau **chậm hơn**. Chỉ dùng khi thật cần.
-- **Smart Boost:** chỉ chạy khi RAM khả dụng dưới ngưỡng (mặc định 15%).
-- Kết quả luôn tách "RAM khả dụng tăng thêm" (lợi ích thật) khỏi "cache đã xoá".
-- Thu gọn bộ nhớ chỉ áp dụng cho tiến trình bạn tự chọn.
+<details>
+<summary><b>Why does SmartScreen or my antivirus warn about the installer?</b></summary>
+
+The installer is self-signed. Removing that warning requires a commercial code-signing
+certificate. Compare the SHA-256 checksum on the release page, or build from source.
+</details>
+
+<details>
+<summary><b>How much memory does PC Manager itself use?</b></summary>
+
+About 2–15 MB while running in the tray. With the window open, about 75–80 MB, most of it the
+WebView2 engine that renders the UI; it releases memory when the window loses focus and is
+shut down completely when you close the window.
+</details>
+
+<details>
+<summary><b>Does it work on macOS or Linux?</b></summary>
+
+Not currently. The system features rely on Windows APIs.
+</details>
+
+## Building from source
+
+Requires Node.js 22+, Rust (stable, `x86_64-pc-windows-msvc`), Visual Studio 2022 Build Tools
+(C++ workload and Windows SDK) and WebView2.
+
+```powershell
+git clone https://github.com/bachxuantrann/pc-manager.git
+cd pc-manager
+npm install
+npm run tauri build   # installer: src-tauri/target/release/bundle/nsis/
+```
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development, tests, CI and releases.
+
+Built with [Tauri 2](https://tauri.app), [React](https://react.dev), [Rust](https://www.rust-lang.org)
+and [windows-rs](https://github.com/microsoft/windows-rs).
 
 ## License
 
-Phát hành theo **MIT hoặc Apache-2.0**, tuỳ bạn chọn: [LICENSE-MIT](LICENSE-MIT),
-[LICENSE-APACHE](LICENSE-APACHE).
+Licensed under either of
 
----
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
 
-## English summary
-
-PC Manager is a lightweight Windows 10/11 utility (Tauri 2 + React + Rust): memory monitor and
-standby-list "Boost", rule-based junk cleaner with preview and dry-run, process and startup
-manager, unused-app finder with leftover cleanup, large/duplicate file finder. It opens without
-admin rights and asks for elevation only when a feature needs it. Deletion is limited to fixed
-rules in `rules/cleaner.toml`; user-picked files only go to the Recycle Bin; system folders are
-hard-blocked; every change is logged. The installer is self-signed, so SmartScreen may warn.
-See [docs/AN-TOAN.md](docs/AN-TOAN.md) (Vietnamese) for the full safety model.
-Licensed under MIT or Apache-2.0.
-
----
-
-## Phát triển
-
-Quy tắc cho AI agent: [CLAUDE.md](CLAUDE.md). Lộ trình theo giai đoạn: [PROMPTS.md](PROMPTS.md).
-
-### Yêu cầu
-- Node 20+, Rust stable `x86_64-pc-windows-msvc`, VS 2022 Build Tools (C++ + Windows SDK), WebView2.
-
-### Chạy
-```powershell
-npm install
-npm run tauri dev      # quyền thường; cần thử chức năng admin: bấm "Chạy với quyền Administrator" trong app
-npm run tauri build    # installer NSIS ở src-tauri/target/release/bundle/nsis/ (chưa ký)
-npm run build:signed   # như trên + ký bằng chứng chỉ tự ký (xem scripts/sign.ps1)
-npx tauri icon app-icon.svg -o src-tauri/icons   # tạo lại icon từ app-icon.svg (xoá thư mục android/ios sinh thêm)
-```
-
-### Kiểm tra trước khi xong một giai đoạn
-```powershell
-cd src-tauri; cargo clippy --all-targets -- -D warnings; cargo test; cd ..; npm run build
-```
-
-### Test với quyền Administrator
-Một số test (Boost thật, DISM, đọc đường dẫn service…) cần quyền admin. Script tự mở lại chính nó
-bằng "Run as administrator" — mỗi lần chạy Windows hiện UAC để bạn xác nhận, không lưu quyền:
-```powershell
-.\scripts\admin-test.ps1                 # toàn bộ test, kể cả test #[ignore] cần admin
-.\scripts\admin-test.ps1 -Filter memory  # chỉ test có "memory" trong tên
-.\scripts\admin-test.ps1 -Mode dev       # mở `npm run tauri dev` trong cửa sổ admin
-.\scripts\admin-test.ps1 -Mode ram       # đo RAM bản release (cần `npm run tauri build` trước)
-```
-Log nằm ở `src-tauri/target/admin-test.log`.
-
-### CI và phát hành
-- **Mỗi lần push lên `main` / mở PR** ([ci.yml](.github/workflows/ci.yml)): build giao diện, clippy, test, build bộ cài
-  (chưa ký) — bộ cài tải được ở trang Actions, mục Artifacts.
-- **Phát hành bản mới** ([release.yml](.github/workflows/release.yml)): đổi `version` ở `package.json`,
-  `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, commit, rồi:
-  ```powershell
-  git tag -a v1.0.1 -m "PC Manager v1.0.1"; git push origin main v1.0.1
-  ```
-  GitHub tự kiểm tra, build bộ cài và tạo Release kèm SHA-256. Tag phải khớp phiên bản trong `package.json`.
-- **Ký bộ cài trên CI (tuỳ chọn):** chạy `.\scripts\new-ci-signing-cert.ps1` một lần (cần `gh auth login`) — tạo
-  chứng chỉ tự ký riêng cho CI và cất vào GitHub Secrets. Không có secret thì Release là bản chưa ký.
-
-### Ảnh chụp màn hình
-`npm run dev` rồi `.\scripts\screenshots.ps1` — mở các trang ở chế độ demo (`?demo&page=...`, dữ liệu giả trong
-`src/dev/demo.ts`, chỉ có ở bản dev) và chụp bằng Edge headless vào `docs/screenshots/`.
-
-### Manifest
-`src-tauri/app.manifest` (asInvoker + Common-Controls v6) cho cả bản debug và release: mở app
-không hỏi UAC. Nâng quyền dùng `ShellExecuteExW("runas")` chạy lại chính exe.
+at your option.
