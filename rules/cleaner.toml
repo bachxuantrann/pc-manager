@@ -1,0 +1,3 @@
+# Rule dọn rác — nhúng vào binary bằng include_str!. Engine làm ở giai đoạn 4.
+# Cleaner CHỈ xoá path khớp rule ở đây (xem mục AN TOÀN trong CLAUDE.md).
+version = 1
