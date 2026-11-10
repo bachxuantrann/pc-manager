@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
-import LeftoverDialog from "../components/LeftoverDialog";
+import LeftoverDialog, { type LeftoverTarget } from "../components/LeftoverDialog";
 import PageShell from "../components/PageShell";
 import { api, errorMessage, type AppsOverview, type InstalledApp, type UsageSource } from "../lib/api";
 import { daysAgo, formatBytes, formatDate, relativeDays } from "../lib/format";
@@ -51,7 +51,9 @@ export default function Apps() {
   const [sort, setSort] = useState<SortKey>("size");
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [leftoverApp, setLeftoverApp] = useState<InstalledApp | null>(null);
+  const [leftoverApp, setLeftoverApp] = useState<LeftoverTarget | null>(null);
+  /** App đang chạy trình gỡ — chờ backend báo xong. */
+  const [uninstalling, setUninstalling] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     setLoading(true);
@@ -65,6 +67,32 @@ export default function Apps() {
       .finally(() => setLoading(false));
   }, []);
   useEffect(load, [load]);
+
+  // Trình gỡ chạy xong: tải lại danh sách; gỡ thành công thì mở luôn "Dọn phần còn sót".
+  useEffect(() => {
+    const un = api.onUninstallFinished((e) => {
+      setUninstalling((prev) => {
+        const next = new Set(prev);
+        next.delete(e.id);
+        return next;
+      });
+      load();
+      if (e.timedOut) {
+        setMsg({ tone: "error", text: `${e.name}: trình gỡ chạy quá lâu, PC Manager thôi theo dõi. Gỡ xong hãy bấm "Dọn sót".` });
+      } else if (e.stillInstalled) {
+        setMsg({
+          tone: "error",
+          text: `Trình gỡ của ${e.name} đã đóng nhưng ứng dụng vẫn còn (đã huỷ hoặc gỡ lỗi). Nếu trình gỡ báo lỗi, dùng "Dọn sót".`,
+        });
+      } else {
+        setMsg({ tone: "ok", text: `Đã gỡ ${e.name}. Đang tìm phần còn sót…` });
+        setLeftoverApp({ id: e.id, name: e.name, afterUninstall: true });
+      }
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, [load]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -96,6 +124,7 @@ export default function Apps() {
       body: (
         <div className="space-y-2">
           <p>PC Manager sẽ mở trình gỡ cài đặt của chính ứng dụng này. Làm theo hướng dẫn trên cửa sổ đó để hoàn tất.</p>
+          <p>Gỡ xong, PC Manager tự tìm phần còn sót (cache, AppData, shortcut…) để bạn xem và dọn.</p>
           {a.lastUsedMs != null && (
             <p className="text-xs opacity-70">
               Lần dùng cuối: {formatDate(a.lastUsedMs)} ({relativeDays(daysAgo(a.lastUsedMs))}).
@@ -110,7 +139,11 @@ export default function Apps() {
         setMsg(null);
         try {
           const name = await api.appsUninstall(a.id);
-          setMsg({ tone: "ok", text: `Đã mở trình gỡ cài đặt của ${name}. Gỡ xong, bấm "Tải lại" để cập nhật danh sách. Nếu trình gỡ báo lỗi hoặc còn sót file, dùng "Dọn sót".` });
+          setUninstalling((prev) => new Set(prev).add(a.id));
+          setMsg({
+            tone: "ok",
+            text: `Đã mở trình gỡ cài đặt của ${name}. Làm theo cửa sổ đó — gỡ xong, PC Manager sẽ tự tìm phần còn sót.`,
+          });
         } catch (e) {
           setMsg({ tone: "error", text: `${a.name}: ${errorMessage(e)}` });
         } finally {
@@ -235,12 +268,12 @@ export default function Apps() {
                         variant="ghost"
                         size="sm"
                         className="text-red-600 dark:text-red-400"
-                        disabled={!a.canUninstall || busyId !== null}
-                        loading={busyId === a.id}
+                        disabled={!a.canUninstall || busyId !== null || uninstalling.has(a.id)}
+                        loading={busyId === a.id || uninstalling.has(a.id)}
                         title={a.canUninstall ? undefined : "Ứng dụng này không cho phép gỡ từ đây"}
                         onClick={() => uninstall(a)}
                       >
-                        Gỡ cài đặt
+                        {uninstalling.has(a.id) ? "Đang gỡ…" : "Gỡ cài đặt"}
                       </Button>
                     </td>
                   </tr>

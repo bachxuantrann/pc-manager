@@ -261,11 +261,28 @@ export interface Leftover {
   blocked: string | null;
 }
 
+/** Service/driver/scheduled task trỏ vào thư mục sắp dọn. */
+export interface Dependency {
+  kind: "service" | "driver" | "task";
+  name: string;
+  command: string;
+}
+
 export interface LeftoverScan {
   scanId: number;
   appName: string;
   uninstallerExists: boolean;
   items: Leftover[];
+  dependencies: Dependency[];
+}
+
+/** Trình gỡ cài đặt (và mọi tiến trình con) đã kết thúc. */
+export interface UninstallFinished {
+  id: string;
+  name: string;
+  /** App vẫn còn trong danh sách — người dùng huỷ hoặc trình gỡ lỗi. */
+  stillInstalled: boolean;
+  timedOut: boolean;
 }
 
 export interface LeftoverReport {
@@ -330,6 +347,9 @@ export const api = {
   /** Chỉ gửi scanId + id mục — file vào Thùng rác, key registry được sao lưu .reg trước. */
   appsLeftoversClean: (scanId: number, itemIds: number[]) =>
     invoke<LeftoverReport>("apps_leftovers_clean", { scanId, itemIds }),
+
+  onUninstallFinished: (cb: (e: UninstallFinished) => void): Promise<UnlistenFn> =>
+    listen<UninstallFinished>("apps://uninstall-finished", (e) => cb(e.payload)),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

@@ -1,4 +1,4 @@
-//! Liệt kê scheduled task có trigger "At log on" qua COM `ITaskService`.
+//! Liệt kê scheduled task qua COM `ITaskService` (task logon, hoặc mọi task).
 //! Chỉ đọc (v1): không bật/tắt/xoá task.
 
 use windows::core::{Interface, BSTR};
@@ -23,7 +23,16 @@ pub struct LogonTask {
 }
 
 /// Duyệt đệ quy toàn bộ thư mục task. Task không đọc được (thiếu quyền) bị bỏ qua.
-pub fn logon_tasks(_com: &ComGuard) -> windows::core::Result<Vec<LogonTask>> {
+pub fn logon_tasks(com: &ComGuard) -> windows::core::Result<Vec<LogonTask>> {
+    list(com, true)
+}
+
+/// Mọi task (mọi loại trigger) — dùng để tìm task trỏ vào thư mục của một app.
+pub fn all_tasks(com: &ComGuard) -> windows::core::Result<Vec<LogonTask>> {
+    list(com, false)
+}
+
+fn list(_com: &ComGuard, logon_only: bool) -> windows::core::Result<Vec<LogonTask>> {
     // SAFETY: COM đã init (bằng chứng `_com`); CLSID/IID khớp.
     let svc: ITaskService = unsafe { CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER)? };
     let empty = VARIANT::default();
@@ -32,11 +41,11 @@ pub fn logon_tasks(_com: &ComGuard) -> windows::core::Result<Vec<LogonTask>> {
     // SAFETY: BSTR hợp lệ sống tới hết lời gọi.
     let root = unsafe { svc.GetFolder(&BSTR::from("\\"))? };
     let mut out = Vec::new();
-    walk(&root, &mut out, 0);
+    walk(&root, &mut out, 0, logon_only);
     Ok(out)
 }
 
-fn walk(folder: &ITaskFolder, out: &mut Vec<LogonTask>, depth: u32) {
+fn walk(folder: &ITaskFolder, out: &mut Vec<LogonTask>, depth: u32, logon_only: bool) {
     if depth > 16 {
         return; // phòng vòng lặp bất thường
     }
@@ -47,7 +56,7 @@ fn walk(folder: &ITaskFolder, out: &mut Vec<LogonTask>, depth: u32) {
             for i in 1..=n {
                 // Collection của Task Scheduler đánh số từ 1.
                 if let Ok(t) = tasks.get_Item(&VARIANT::from(i)) {
-                    if let Some(task) = read_task(&t) {
+                    if let Some(task) = read_task(&t, logon_only) {
                         out.push(task);
                     }
                 }
@@ -57,15 +66,15 @@ fn walk(folder: &ITaskFolder, out: &mut Vec<LogonTask>, depth: u32) {
             let n = subs.Count().unwrap_or(0);
             for i in 1..=n {
                 if let Ok(f) = subs.get_Item(&VARIANT::from(i)) {
-                    walk(&f, out, depth + 1);
+                    walk(&f, out, depth + 1, logon_only);
                 }
             }
         }
     }
 }
 
-/// `None` nếu task không có trigger logon hoặc không đọc được.
-fn read_task(t: &IRegisteredTask) -> Option<LogonTask> {
+/// `None` nếu không đọc được, hoặc `logon_only` mà task không có trigger logon.
+fn read_task(t: &IRegisteredTask, logon_only: bool) -> Option<LogonTask> {
     // SAFETY: lời gọi COM trên interface hợp lệ; out-pointer trỏ tới biến stack.
     unsafe {
         let def = t.Definition().ok()?;
@@ -78,7 +87,7 @@ fn read_task(t: &IRegisteredTask) -> Option<LogonTask> {
                 tr.Type(&mut ty).is_ok() && ty == TASK_TRIGGER_LOGON
             })
         });
-        if !has_logon {
+        if logon_only && !has_logon {
             return None;
         }
 
@@ -127,5 +136,6 @@ mod tests {
         for t in &tasks {
             assert!(t.path.starts_with('\\'), "{t:?}");
         }
+        assert!(all_tasks(&com).unwrap().len() >= tasks.len());
     }
 }

@@ -12,7 +12,7 @@ pub mod userassist;
 use std::collections::HashMap;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rayon::prelude::*;
 use serde::Serialize;
@@ -269,8 +269,15 @@ pub fn parse_uninstall(cmd: &str, system32: &Path) -> Option<UninstallCommand> {
     program.is_absolute().then(|| UninstallCommand { program, args: rest.trim().to_owned() })
 }
 
+/// Trình gỡ đã được mở: thông tin app (chụp TRƯỚC khi gỡ) + PID tiến trình gỡ.
+#[derive(Debug, Clone)]
+pub struct Started {
+    pub app: Installed,
+    pub pid: u32,
+}
+
 /// Mở trình gỡ cài đặt của app `id`. Lệnh luôn đọc lại từ registry, không nhận từ UI.
-pub fn uninstall(store: &Store, id: &str) -> AppResult<String> {
+pub fn uninstall(store: &Store, id: &str) -> AppResult<Started> {
     let app = installed::find(id).ok_or_else(|| AppError::NotFound("ứng dụng không còn trong danh sách".into()))?;
     let result = (|| {
         if app.no_remove {
@@ -282,15 +289,88 @@ pub fn uninstall(store: &Store, id: &str) -> AppResult<String> {
         if !cmd.program.is_file() {
             return Err(AppError::NotFound(format!("không tìm thấy {}", cmd.program.display())));
         }
-        std::process::Command::new(&cmd.program).raw_arg(&cmd.args).spawn()?;
-        Ok(format!("{} {}", cmd.program.display(), cmd.args))
+        let child = std::process::Command::new(&cmd.program).raw_arg(&cmd.args).spawn()?;
+        Ok((format!("{} {}", cmd.program.display(), cmd.args), child.id()))
     })();
     let detail = match &result {
-        Ok(c) => c.clone(),
+        Ok((c, _)) => c.clone(),
         Err(e) => e.to_string(),
     };
     store.log_action_best_effort("app.uninstall", &app.name, result.is_ok(), &detail);
-    result.map(|_| app.name)
+    result.map(|(_, pid)| Started { app, pid })
+}
+
+/// FILETIME (100ns từ 1601) của một thời điểm.
+fn filetime(t: SystemTime) -> u64 {
+    const EPOCH_DIFF_SECS: u64 = 11_644_473_600;
+    let d = t.duration_since(UNIX_EPOCH).unwrap_or_default();
+    (d.as_secs() + EPOCH_DIFF_SECS) * 10_000_000 + u64::from(d.subsec_nanos() / 100)
+}
+
+/// Cây tiến trình của trình gỡ. Nhiều trình gỡ (Inno Setup, NSIS) tự chép ra
+/// thư mục Temp, chạy bản chép rồi thoát ngay — nên phải theo dõi cả con cháu.
+#[derive(Debug)]
+struct ProcessTree {
+    /// (pid, create_time) đã từng thuộc cây; phần tử 0 là tiến trình gốc.
+    members: Vec<(u32, u64)>,
+    /// false = create_time của gốc mới là cận dưới (chưa thấy gốc trong danh sách).
+    root_exact: bool,
+}
+
+impl ProcessTree {
+    fn new(root_pid: u32, root_created_after: u64) -> Self {
+        Self { members: vec![(root_pid, root_created_after)], root_exact: false }
+    }
+
+    fn is_member(&self, pid: u32, created: u64) -> bool {
+        self.members.iter().any(|&(m, mc)| m == pid && mc == created)
+    }
+
+    /// `procs` = (pid, ppid, create_time). Trả về true nếu còn tiến trình nào của cây đang chạy.
+    fn update(&mut self, procs: &[(u32, u32, u64)]) -> bool {
+        let (root, lower) = self.members[0];
+        if !self.root_exact {
+            if let Some(&(_, _, c)) = procs.iter().find(|&&(p, _, c)| p == root && c >= lower) {
+                self.members[0].1 = c;
+                self.root_exact = true;
+            }
+        }
+        loop {
+            let mut added = false;
+            for &(pid, ppid, created) in procs {
+                // Con phải được tạo SAU cha — tránh nhầm khi PID bị tái sử dụng.
+                if !self.is_member(pid, created) && self.members.iter().any(|&(m, mc)| m == ppid && created >= mc) {
+                    self.members.push((pid, created));
+                    added = true;
+                }
+            }
+            if !added {
+                break;
+            }
+        }
+        procs.iter().any(|&(p, _, c)| self.is_member(p, c))
+    }
+}
+
+/// Chờ trình gỡ (và các tiến trình con) kết thúc. false = quá `timeout`.
+pub fn wait_uninstall(pid: u32, started_at: SystemTime, timeout: Duration) -> bool {
+    // Lùi 5s để chắc chắn create_time của tiến trình gốc >= mốc này.
+    let mut tree = ProcessTree::new(pid, filetime(started_at).saturating_sub(50_000_000));
+    let deadline = Instant::now() + timeout;
+    loop {
+        let procs: Vec<(u32, u32, u64)> = crate::sys::process::enumerate()
+            .unwrap_or_default()
+            .iter()
+            .map(|p| (p.pid, p.ppid, p.create_time))
+            .collect();
+        if !procs.is_empty() && !tree.update(&procs) {
+            return true;
+        }
+        if Instant::now() > deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(700));
+    }
 }
 
 #[cfg(test)]
@@ -326,6 +406,42 @@ mod tests {
         // Không cho PATH quyết định chạy chương trình nào.
         assert!(parse_uninstall("uninstall.exe /x", &sys32()).is_none());
         assert!(parse_uninstall("", &sys32()).is_none());
+    }
+
+    #[test]
+    fn process_tree_follows_relaunched_uninstaller() {
+        let mut t = ProcessTree::new(100, 1000);
+        // unins000.exe (100) chạy bản chép _iu14D2N.tmp (200) rồi thoát.
+        assert!(t.update(&[(100, 4, 1001), (200, 100, 1002), (300, 4, 900)]));
+        assert!(t.update(&[(200, 100, 1002), (300, 4, 900)]), "con vẫn chạy dù gốc đã thoát");
+        // Cháu (UAC elevate) — cha 200 vẫn được nhận ra.
+        assert!(t.update(&[(200, 100, 1002), (250, 200, 1003)]));
+        assert!(t.update(&[(250, 200, 1003)]));
+        // PID 200 bị tái sử dụng bởi tiến trình khác (create_time khác) → không tính.
+        assert!(!t.update(&[(200, 4, 5000), (300, 4, 900)]));
+        // Tiến trình cũ hơn gốc có ppid trùng không bị nhận nhầm.
+        let mut t2 = ProcessTree::new(100, 1000);
+        assert!(!t2.update(&[(400, 100, 500)]));
+    }
+
+    #[test]
+    fn waits_for_child_processes_of_uninstaller() {
+        // cmd (gốc) chạy ping (con, ~2s). cmd /c start /b: gốc thoát ngay, con vẫn chạy.
+        let started = SystemTime::now();
+        let t0 = Instant::now();
+        let mut child = std::process::Command::new(r"C:\Windows\System32\cmd.exe")
+            .args(["/c", "start", "/b", r"C:\Windows\System32\PING.EXE", "-n", "3", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        assert!(wait_uninstall(child.id(), started, Duration::from_secs(30)));
+        let _ = child.wait();
+        assert!(t0.elapsed() >= Duration::from_millis(1500), "phải chờ cả ping: {:?}", t0.elapsed());
+    }
+
+    #[test]
+    fn filetime_epoch() {
+        assert_eq!(filetime(UNIX_EPOCH), 116_444_736_000_000_000);
     }
 
     #[test]

@@ -5,7 +5,7 @@
 //! - Key registry được export `.reg` trước khi xoá.
 //! - Mỗi đường dẫn qua `Guard` lúc quét VÀ ngay trước khi dọn.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::os::windows::process::CommandExt;
 use std::path::{Component, Path, PathBuf, Prefix};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -63,6 +63,8 @@ pub struct LeftoverScan {
     /// Trình gỡ của app vẫn còn trên đĩa → nên thử nó trước.
     pub uninstaller_exists: bool,
     pub items: Vec<Leftover>,
+    /// Service/driver/task trỏ vào các thư mục trên — nên dùng trình gỡ của hãng.
+    pub dependencies: Vec<Dependency>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -466,7 +468,75 @@ fn scan_shortcuts(c: &mut Collector<'_>, roots: &Roots, names: &Names, install: 
     }
 }
 
-fn scan_app(app: &Installed) -> (Vec<Item>, bool) {
+// ---- Service / driver / scheduled task dùng thư mục của app ---------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DependencyKind {
+    Service,
+    Driver,
+    Task,
+}
+
+/// Thành phần hệ thống trỏ vào thư mục sắp dọn. Xoá file mà để lại chúng sẽ gây
+/// lỗi lúc khởi động — nên mục liên quan bị hạ xuống "có thể" và UI cảnh báo.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Dependency {
+    pub kind: DependencyKind,
+    pub name: String,
+    pub command: String,
+}
+
+/// (loại, tên, dòng lệnh đã chuẩn hoá) của mọi service, driver và scheduled task.
+fn system_commands() -> Vec<(DependencyKind, String, String)> {
+    const SERVICES: &str = r"SYSTEM\CurrentControlSet\Services";
+    let windir = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let expand = |s: &str| crate::startup::command::expand_env(s, |k| std::env::var(k).ok());
+    let mut out = Vec::new();
+    if let Ok(key) = windows_registry::LOCAL_MACHINE.open(SERVICES) {
+        for name in key.keys().into_iter().flatten() {
+            let Ok(k) = key.open(&name) else { continue };
+            let Ok(image) = k.get_string("ImagePath") else { continue };
+            // Type: 1 = kernel driver, 2 = file system driver; còn lại là service.
+            let kind = if matches!(k.get_u32("Type").unwrap_or(0x10), 1 | 2) { DependencyKind::Driver } else { DependencyKind::Service };
+            let display = k.get_string("DisplayName").ok().filter(|d| !d.starts_with('@')).unwrap_or_else(|| name.clone());
+            out.push((kind, display, expand(&crate::startup::command::normalize_image_path(&image, &windir))));
+        }
+    }
+    if let Ok(com) = ComGuard::init() {
+        for t in crate::sys::tasks::all_tasks(&com).unwrap_or_default() {
+            for (exe, args) in &t.actions {
+                out.push((DependencyKind::Task, t.path.clone(), expand(&format!("{exe} {args}"))));
+            }
+        }
+    }
+    out
+}
+
+/// Gắn các thành phần hệ thống vào mục thư mục mà chúng dùng.
+fn mark_dependencies(items: &mut [Item], commands: &[(DependencyKind, String, String)]) -> Vec<Dependency> {
+    let mut deps = Vec::new();
+    for item in items.iter_mut().filter(|i| i.info.kind != LeftoverKind::Registry) {
+        let Some(path) = &item.path else { continue };
+        let dir = format!("{}\\", norm(&path.to_string_lossy()));
+        let hits: Vec<_> = commands.iter().filter(|(_, _, cmd)| cmd.replace('/', "\\").to_lowercase().contains(&dir)).collect();
+        if hits.is_empty() {
+            continue;
+        }
+        item.info.confidence = Confidence::Possible;
+        let names: Vec<&str> = hits.iter().map(|(_, n, _)| n.as_str()).take(3).collect();
+        item.info.reason = format!("{} — đang được dùng bởi {} (service/driver/task)", item.info.reason, names.join(", "));
+        for (kind, name, command) in hits {
+            if !deps.iter().any(|d: &Dependency| d.name == *name && d.kind == *kind) {
+                deps.push(Dependency { kind: *kind, name: name.clone(), command: command.clone() });
+            }
+        }
+    }
+    deps
+}
+
+fn scan_app(app: &Installed, key_exists: bool) -> (Vec<Item>, bool, Vec<Dependency>) {
     let roots = Roots::from_env();
     let guard = build_guard(&app.id, app.install_location.as_deref(), &roots);
     let install_name = app.install_location.as_deref().and_then(|l| l.file_name()).map(|n| n.to_string_lossy().into_owned());
@@ -481,15 +551,24 @@ fn scan_app(app: &Installed) -> (Vec<Item>, bool) {
     scan_shortcuts(&mut c, &roots, &names, install.as_ref().map(|(d, _)| d.as_path()));
 
     let mut items = c.items;
-    if let Some((_, _, full)) = installed::registry_location(&app.id) {
+    let dependencies = mark_dependencies(&mut items, &system_commands());
+    // Trình gỡ đã xoá key thì không còn gì để dọn ở registry.
+    if let Some((_, _, full)) = installed::registry_location(&app.id).filter(|_| key_exists) {
+        // App còn service/driver/task hoặc còn thư mục không dọn được => xoá key chỉ làm
+        // app "biến mất" khỏi danh sách trong khi vẫn đang cài. Không tick sẵn.
+        let risky = !dependencies.is_empty() || items.iter().any(|i| i.info.blocked.is_some());
         items.push(Item {
             info: Leftover {
                 id: 0,
                 kind: LeftoverKind::Registry,
                 path: full,
                 bytes: None,
-                confidence: Confidence::Strong,
-                reason: "mục trong danh sách ứng dụng đã cài (sao lưu .reg trước khi xoá)".into(),
+                confidence: if risky { Confidence::Possible } else { Confidence::Strong },
+                reason: if risky {
+                    "mục trong danh sách ứng dụng đã cài — app vẫn còn thành phần đang dùng, chỉ xoá nếu chắc chắn".into()
+                } else {
+                    "mục trong danh sách ứng dụng đã cài (sao lưu .reg trước khi xoá)".into()
+                },
                 blocked: None,
             },
             path: None,
@@ -498,7 +577,7 @@ fn scan_app(app: &Installed) -> (Vec<Item>, bool) {
     for (i, it) in items.iter_mut().enumerate() {
         it.info.id = i as u32;
     }
-    (items, uninstaller_exists(app))
+    (items, uninstaller_exists(app), dependencies)
 }
 
 // ---- Quản lý phiên quét / dọn ---------------------------------------------------
@@ -516,22 +595,38 @@ pub struct LeftoverManager {
     backup_dir: PathBuf,
     next_id: AtomicU64,
     stored: Mutex<Option<Stored>>,
+    /// Thông tin app chụp ngay trước khi chạy trình gỡ (key registry có thể đã bị xoá).
+    snapshots: Mutex<HashMap<String, Installed>>,
 }
 
 impl LeftoverManager {
     pub fn new(backup_dir: PathBuf) -> Self {
-        Self { backup_dir, next_id: AtomicU64::new(1), stored: Mutex::new(None) }
+        Self { backup_dir, next_id: AtomicU64::new(1), stored: Mutex::new(None), snapshots: Mutex::new(HashMap::new()) }
+    }
+
+    /// Ghi nhớ app trước khi gỡ. Dữ liệu lấy từ registry phía backend, không từ UI.
+    pub fn remember(&self, app: Installed) {
+        let mut s = self.snapshots.lock().unwrap_or_else(|e| e.into_inner());
+        if s.len() >= 32 {
+            s.clear();
+        }
+        s.insert(app.id.clone(), app);
     }
 
     pub fn scan(&self, app_id: &str) -> AppResult<LeftoverScan> {
-        let app = installed::find(app_id).ok_or_else(|| AppError::NotFound("ứng dụng không còn trong danh sách".into()))?;
-        let (items, uninstaller_exists) = scan_app(&app);
+        let current = installed::find(app_id);
+        let key_exists = current.is_some();
+        let app = current
+            .or_else(|| self.snapshots.lock().unwrap_or_else(|e| e.into_inner()).get(app_id).cloned())
+            .ok_or_else(|| AppError::NotFound("ứng dụng không còn trong danh sách".into()))?;
+        let (items, uninstaller_exists, dependencies) = scan_app(&app, key_exists);
         let scan_id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let out = LeftoverScan {
             scan_id,
             app_name: app.name.clone(),
             uninstaller_exists,
             items: items.iter().map(|i| i.info.clone()).collect(),
+            dependencies,
         };
         let stored = Stored { scan_id, app_id: app.id, app_name: app.name, install_location: app.install_location, created: Instant::now(), items };
         *self.stored.lock().unwrap_or_else(|e| e.into_inner()) = Some(stored);
@@ -767,6 +862,34 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn services_pointing_into_folder_downgrade_it() {
+        let item = |id: u32, p: &str| Item {
+            info: Leftover {
+                id,
+                kind: LeftoverKind::DataDir,
+                path: p.into(),
+                bytes: None,
+                confidence: Confidence::Strong,
+                reason: "x".into(),
+                blocked: None,
+            },
+            path: Some(PathBuf::from(p)),
+        };
+        let mut items = vec![item(0, r"C:\Program Files\VPN"), item(1, r"C:\Program Files\VPNData")];
+        let cmds = vec![
+            (DependencyKind::Driver, "vpnfilter".to_owned(), r"C:\Program Files\VPN\drv\filter.sys".to_owned()),
+            (DependencyKind::Service, "VPN Service".to_owned(), r#""C:/Program Files/VPN/svc.exe" -k"#.to_owned()),
+            (DependencyKind::Task, r"\Other".to_owned(), r"C:\Other\x.exe".to_owned()),
+        ];
+        let deps = mark_dependencies(&mut items, &cmds);
+        assert_eq!(deps.len(), 2);
+        assert_eq!(items[0].info.confidence, Confidence::Possible);
+        assert!(items[0].info.reason.contains("vpnfilter"));
+        // "VPNData" không bị nhầm là nằm trong "VPN".
+        assert_eq!(items[1].info.confidence, Confidence::Strong);
+    }
+
     /// Chẩn đoán trên máy thật: `cargo test print_leftovers -- --ignored --nocapture`
     /// (đặt PCM_APP=một phần tên app). Chỉ quét, KHÔNG dọn.
     #[test]
@@ -777,8 +900,8 @@ mod tests {
             println!("không thấy app khớp '{q}'");
             return;
         };
-        let (items, unins) = scan_app(&app);
-        println!("{} (trình gỡ còn: {unins})", app.name);
+        let (items, unins, deps) = scan_app(&app, true);
+        println!("{} (trình gỡ còn: {unins}) phụ thuộc: {deps:?}", app.name);
         for i in items {
             println!("{:?} {:?} {:?} {} — {} {:?}", i.info.kind, i.info.confidence, i.info.bytes, i.info.path, i.info.reason, i.info.blocked);
         }

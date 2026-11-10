@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "./Button";
 import { Notice } from "./Card";
-import { api, errorMessage, type InstalledApp, type LeftoverKind, type LeftoverReport, type LeftoverScan } from "../lib/api";
+import { api, errorMessage, type Dependency, type LeftoverKind, type LeftoverReport, type LeftoverScan } from "../lib/api";
 import { formatBytes } from "../lib/format";
 
 const KIND_LABEL: Record<LeftoverKind, string> = {
@@ -13,11 +13,20 @@ const KIND_LABEL: Record<LeftoverKind, string> = {
 
 type Phase = "scan" | "review" | "confirm" | "clean" | "done";
 
+export interface LeftoverTarget {
+  id: string;
+  name: string;
+  /** Mở tự động ngay sau khi trình gỡ chạy xong. */
+  afterUninstall?: boolean;
+}
+
+const DEP_LABEL: Record<Dependency["kind"], string> = { service: "Service", driver: "Driver", task: "Scheduled task" };
+
 /**
  * Dọn phần còn sót của một app: Quét → Xem & chọn → Xác nhận → Dọn.
  * File/thư mục vào Thùng rác (khôi phục được); key registry được sao lưu .reg trước khi xoá.
  */
-export default function LeftoverDialog({ app, onClose }: { app: InstalledApp | null; onClose: (changed: boolean) => void }) {
+export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget | null; onClose: (changed: boolean) => void }) {
   const [phase, setPhase] = useState<Phase>("scan");
   const [scan, setScan] = useState<LeftoverScan | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -95,7 +104,30 @@ export default function LeftoverDialog({ app, onClose }: { app: InstalledApp | n
           được); mục registry được sao lưu ra file <code>.reg</code> trước khi xoá.
         </p>
 
-        {scan?.uninstallerExists && phase === "review" && (
+        {app.afterUninstall && phase !== "done" && (
+          <div className="mt-3">
+            <Notice tone="ok">Trình gỡ cài đặt đã chạy xong. Dưới đây là những gì nó để lại.</Notice>
+          </div>
+        )}
+        {scan && scan.dependencies.length > 0 && phase !== "done" && (
+          <div className="mt-3">
+            <Notice tone="error">
+              <span className="block">
+                Ứng dụng vẫn còn {scan.dependencies.length} thành phần hệ thống dùng các thư mục này. Xoá file mà để lại chúng có thể gây
+                lỗi khi khởi động — nên gỡ bằng trình gỡ (hoặc công cụ gỡ chính hãng) trước. Các mục liên quan không được chọn sẵn.
+              </span>
+              <span className="mt-1 block text-xs">
+                {scan.dependencies.slice(0, 6).map((d) => (
+                  <span key={`${d.kind}${d.name}`} className="block truncate" title={d.command}>
+                    • {DEP_LABEL[d.kind]}: {d.name}
+                  </span>
+                ))}
+                {scan.dependencies.length > 6 && <span className="block">… và {scan.dependencies.length - 6} mục khác</span>}
+              </span>
+            </Notice>
+          </div>
+        )}
+        {scan?.uninstallerExists && !app.afterUninstall && phase === "review" && (
           <div className="mt-3">
             <Notice tone="error">
               Trình gỡ cài đặt của ứng dụng vẫn còn. Nên thử "Gỡ cài đặt" trước — chỉ dọn ở đây khi trình gỡ báo lỗi (như NetBeans
