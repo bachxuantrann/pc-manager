@@ -337,10 +337,25 @@ mod tests {
         assert!(p.protected_reason.is_none());
         let target = ProcessRef { pid, create_time: p.create_time.clone() };
 
+        // Windows coi tiến trình là "đã tạm dừng" khi mọi luồng đã chuyển sang trạng thái chờ;
+        // trên máy chậm (vd. GitHub Actions) việc này cần thêm chút thời gian sau lệnh => chờ tối đa 3 giây.
+        let ctime: u64 = p.create_time.parse().unwrap();
+        let settles = |want: bool| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            loop {
+                if find(pid, ctime).unwrap().suspended == want {
+                    return true;
+                }
+                if std::time::Instant::now() > deadline {
+                    return false;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        };
         pm.act(&store, &target, ProcessOp::Suspend).unwrap();
-        assert!(find(pid, p.create_time.parse().unwrap()).unwrap().suspended);
+        assert!(settles(true), "tiến trình phải ở trạng thái tạm dừng");
         pm.act(&store, &target, ProcessOp::Resume).unwrap();
-        assert!(!find(pid, p.create_time.parse().unwrap()).unwrap().suspended);
+        assert!(settles(false), "tiến trình phải chạy lại");
         pm.act(&store, &target, ProcessOp::SetPriority(PriorityClass::BelowNormal)).unwrap();
         assert!(pm.act(&store, &target, ProcessOp::Trim).unwrap().trimmed_bytes.is_some());
         pm.act(&store, &target, ProcessOp::Kill).unwrap();

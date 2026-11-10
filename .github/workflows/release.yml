@@ -19,7 +19,7 @@ jobs:
     env:
       HAS_CERT: ${{ secrets.SIGNING_PFX_BASE64 != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Tag phải khớp phiên bản trong package.json
         shell: pwsh
@@ -28,9 +28,9 @@ jobs:
           $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($tag -ne $pkg) { throw "Tag v$tag khác phiên bản package.json ($pkg). Đổi phiên bản rồi tag lại." }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
