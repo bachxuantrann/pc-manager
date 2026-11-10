@@ -147,6 +147,13 @@ Windows 本身的内存管理已经很好，所以 PC Manager 不承诺"神奇�
 </details>
 
 <details>
+<summary><b>应用意外关闭，如何报告？</b></summary>
+
+PC Manager 会把意外错误记录在 `%APPDATA%\com.pcmanager.app\logs\crash.log`。
+请[提交 issue](https://github.com/bachxuantrann/pc-manager/issues/new)，附上该文件、Windows 版本以及当时的操作。
+</details>
+
+<details>
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
 目前不支持。系统功能依赖 Windows API。

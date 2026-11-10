@@ -10,6 +10,7 @@
 
 pub mod bg;
 pub mod commands;
+pub mod crashlog;
 pub mod error;
 pub mod settings;
 pub mod state;
@@ -115,6 +116,8 @@ fn spawn_show_listener(app: AppHandle, guard: sys::instance::InstanceGuard) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Ghi panic ra crash.log trước khi app tắt (release dùng panic = "abort").
+    crashlog::install();
     let tray_only = std::env::args().any(|a| a == settings::TRAY_ARG);
     // Vừa được chạy lại với quyền admin: chờ bản cũ thoát hẳn (nhả mutex, và WebView2
     // của nó dùng chung thư mục dữ liệu) rồi mới khởi động.

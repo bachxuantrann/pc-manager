@@ -159,6 +159,14 @@ WebView2 エンジンです。ウィンドウがフォーカスを失うとメ�
 </details>
 
 <details>
+<summary><b>アプリが突然終了しました。どう報告すればよいですか？</b></summary>
+
+PC Manager は予期しないエラーを `%APPDATA%\com.pcmanager.app\logs\crash.log` に記録します。
+そのファイル、Windows のバージョン、実行していた操作を添えて
+[Issue を作成](https://github.com/bachxuantrann/pc-manager/issues/new)してください。
+</details>
+
+<details>
 <summary><b>macOS や Linux で動きますか？</b></summary>
 
 現在は対応していません。システム機能が Windows API に依存しているためです。

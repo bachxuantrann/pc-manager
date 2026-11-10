@@ -248,7 +248,9 @@ pub struct UninstallCommand {
 /// `/X{GUID}` (gỡ bỏ) như Programs and Features vẫn làm.
 pub fn parse_uninstall(cmd: &str, system32: &Path) -> Option<UninstallCommand> {
     let cmd = cmd.trim();
-    let lower = cmd.to_lowercase();
+    // ASCII-lowercase giữ nguyên độ dài byte, nên vị trí tìm trên `lower` dùng được cho `cmd`.
+    // (`to_lowercase()` đổi độ dài với vài ký tự Unicode, vd 'İ' => "i̇", làm cắt sai/panic.)
+    let lower = cmd.to_ascii_lowercase();
     if lower.starts_with("msiexec") || lower.contains("\\msiexec.exe") {
         let start = cmd.find('{')?;
         let end = start + cmd[start..].find('}')?;
@@ -398,6 +400,19 @@ mod tests {
         assert_eq!(
             parse_uninstall(r"C:\Program Files\App X\unins000.exe /SILENT", &sys32()),
             Some(UninstallCommand { program: r"C:\Program Files\App X\unins000.exe".into(), args: "/SILENT".into() })
+        );
+    }
+
+    #[test]
+    fn unicode_paths_do_not_panic_or_shift() {
+        // 'İ' đổi độ dài byte khi to_lowercase() — từng làm lệch vị trí ".exe".
+        assert_eq!(
+            parse_uninstall(r"C:\Program Files\İstanbul App\unins000.exe /SILENT", &sys32()),
+            Some(UninstallCommand { program: r"C:\Program Files\İstanbul App\unins000.exe".into(), args: "/SILENT".into() })
+        );
+        assert_eq!(
+            parse_uninstall(r"C:\Program Files\Ứng dụng Việt\Gỡ cài đặt.exe /S", &sys32()),
+            Some(UninstallCommand { program: r"C:\Program Files\Ứng dụng Việt\Gỡ cài đặt.exe".into(), args: "/S".into() })
         );
     }
 

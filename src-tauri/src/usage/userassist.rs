@@ -60,9 +60,11 @@ const KNOWN_FOLDERS: &[(&str, &str)] = &[
 /// Thay GUID known folder ở đầu chuỗi bằng đường dẫn thật.
 pub fn expand_known_folder(decoded: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
     for (guid, var) in KNOWN_FOLDERS {
-        if decoded.len() >= guid.len() && decoded[..guid.len()].eq_ignore_ascii_case(guid) {
+        // `get` thay vì `[..]`: đường dẫn có ký tự nhiều byte (tiếng Việt…) có thể khiến vị trí
+        // cắt rơi giữa một ký tự — `[..]` sẽ panic (từng làm app tắt khi mở trang Ứng dụng).
+        if let Some(rest) = decoded.get(..guid.len()).filter(|p| p.eq_ignore_ascii_case(guid)).and_then(|_| decoded.get(guid.len()..)) {
             let base = crate::startup::command::expand_env(var, env);
-            return format!("{base}{}", &decoded[guid.len()..]);
+            return format!("{base}{rest}");
         }
     }
     decoded.to_owned()
@@ -118,6 +120,22 @@ mod tests {
             r"C:\Windows\System32\notepad.exe"
         );
         assert_eq!(expand_known_folder("Microsoft.Windows.Explorer", &env), "Microsoft.Windows.Explorer");
+    }
+
+    /// Lỗi thật: đường dẫn có ký tự nhiều byte (tiếng Việt…) vắt qua byte thứ 38 (độ dài GUID)
+    /// từng làm `decoded[..38]` panic => app (panic = "abort") tắt ngay khi mở trang Ứng dụng.
+    #[test]
+    fn non_ascii_path_across_guid_length_does_not_panic() {
+        let env = |_: &str| None;
+        for prefix_len in 30..45 {
+            let path = format!(r"C:\{}\Nguyễn Văn Ứng dụng\app.exe", "x".repeat(prefix_len));
+            assert_eq!(expand_known_folder(&path, &env), path);
+        }
+        // Đúng ca hiểm: 37 byte ASCII rồi một ký tự 3 byte => byte 38 nằm giữa ký tự.
+        let tricky = format!("{}ễ\\app.exe", "x".repeat(37));
+        assert_eq!(expand_known_folder(&tricky, &env), tricky);
+        // Chuỗi ngắn hơn GUID có dấu.
+        assert_eq!(expand_known_folder("Ứng dụng", &env), "Ứng dụng");
     }
 
     #[test]

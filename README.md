@@ -165,6 +165,14 @@ shut down completely when you close the window.
 </details>
 
 <details>
+<summary><b>The app closed unexpectedly. How do I report it?</b></summary>
+
+PC Manager records unexpected errors in `%APPDATA%\com.pcmanager.app\logs\crash.log`.
+[Open an issue](https://github.com/bachxuantrann/pc-manager/issues/new) with that file, your
+Windows version and what you were doing.
+</details>
+
+<details>
 <summary><b>Does it work on macOS or Linux?</b></summary>
 
 Not currently. The system features rely on Windows APIs.

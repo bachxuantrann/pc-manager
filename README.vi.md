@@ -158,6 +158,14 @@ Khoảng 2–15 MB khi chạy ngầm ở khay. Khi mở cửa sổ khoảng 75�
 </details>
 
 <details>
+<summary><b>App tự tắt đột ngột, báo lỗi thế nào?</b></summary>
+
+PC Manager ghi lại lỗi không lường trước vào `%APPDATA%\com.pcmanager.app\logs\crash.log`.
+Hãy [tạo issue](https://github.com/bachxuantrann/pc-manager/issues/new) kèm file đó, phiên bản
+Windows và thao tác bạn đang làm.
+</details>
+
+<details>
 <summary><b>Có chạy trên macOS hoặc Linux không?</b></summary>
 
 Hiện chưa. Các tính năng hệ thống dựa trên API của Windows.
