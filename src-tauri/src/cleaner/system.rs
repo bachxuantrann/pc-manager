@@ -17,6 +17,7 @@ use serde::Serialize;
 use crate::error::{AppError, AppResult};
 use crate::store::Store;
 use crate::sys;
+use crate::sync::LockExt;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const VOLUME_CACHES: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches";
@@ -131,7 +132,7 @@ pub fn parse_analysis(out: &str) -> WinSxsAnalysis {
 
 impl SystemCleaner {
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, ()>> {
-        self.running.try_lock().map_err(|_| AppError::Busy("đang có một thao tác dọn hệ thống khác".into()))
+        self.running.try_lock_recover().ok_or_else(|| AppError::Busy("đang có một thao tác dọn hệ thống khác".into()))
     }
 
     /// `DISM /AnalyzeComponentStore` — chỉ đọc, mất khoảng 1 phút.

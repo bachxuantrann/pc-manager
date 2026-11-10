@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::memory::{
     BoostMode, BoostReport, BoostTrigger, MemorySettings, MemoryStatus, SmartBoostOutcome,
 };
@@ -30,7 +30,7 @@ pub async fn run_boost(app: AppHandle, trigger: BoostTrigger, mode: BoostMode) -
         state.memory.boost(&state.store, trigger, mode)
     })
     .await
-    .map_err(|e| AppError::Other(format!("boost task: {e}")))??;
+    .map_err(|e| crate::error::task_failed("Boost RAM", e))??;
     let _ = app.emit(EVENT_BOOSTED, &report);
     Ok(report)
 }
@@ -49,7 +49,7 @@ pub async fn memory_smart_boost(app: AppHandle) -> AppResult<SmartBoostOutcome> 
         state.memory.smart_boost(&state.store, threshold, BoostTrigger::Smart)
     })
     .await
-    .map_err(|e| AppError::Other(format!("smart boost task: {e}")))??;
+    .map_err(|e| crate::error::task_failed("Smart Boost", e))??;
     if let SmartBoostOutcome::Boosted { report } = &outcome {
         let _ = app.emit(EVENT_BOOSTED, report);
     }

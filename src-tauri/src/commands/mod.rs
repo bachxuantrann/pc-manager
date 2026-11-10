@@ -68,7 +68,7 @@ pub async fn app_relaunch_elevated(app: AppHandle, state: State<'_, AppState>, p
     }
     let started = tauri::async_runtime::spawn_blocking(move || sys::shell::run_elevated(&exe, &args))
         .await
-        .map_err(|e| AppError::Other(format!("relaunch task: {e}")))??;
+        .map_err(|e| crate::error::task_failed("chạy lại với quyền Administrator", e))??;
     state.store.log_action_best_effort(
         "app.elevate",
         "PC Manager",

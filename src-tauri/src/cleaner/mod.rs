@@ -27,6 +27,7 @@ use crate::sys;
 use engine::{Counters, DeleteStats, RuleScanData};
 use rules::{Risk, Rule, RuleKind};
 use safety::BanList;
+use crate::sync::LockExt;
 
 /// Kết quả quét hết hạn sau 30 phút — phải quét lại trước khi dọn.
 const SCAN_TTL: Duration = Duration::from_secs(30 * 60);
@@ -182,7 +183,8 @@ impl CleanerManager {
             .collect();
         if ids.is_empty() {
             // Không có gì để dọn — bỏ kết quả quét.
-            if let Ok(mut l) = self.last.lock() {
+            {
+                let mut l = self.last.lock_recover();
                 l.take();
             }
             return Ok(CleanReport {
@@ -241,7 +243,8 @@ impl CleanerManager {
         let last_emit = Mutex::new(Instant::now() - Duration::from_secs(1));
         let emit = |current: &str| {
             // Tối đa ~10 lần/giây để không làm nghẽn IPC.
-            if let Ok(mut t) = last_emit.lock() {
+            {
+                let mut t = last_emit.lock_recover();
                 if t.elapsed() < Duration::from_millis(100) {
                     return;
                 }
@@ -285,7 +288,8 @@ impl CleanerManager {
         }
         let total_bytes = rules_out.iter().filter(|r| matches!(r.status, RuleStatus::Ready)).map(|r| r.bytes).sum();
         // Quét bị huỷ dở thì không được dùng để dọn.
-        if let Ok(mut last) = self.last.lock() {
+        {
+            let mut last = self.last.lock_recover();
             *last = (!cancelled).then(|| StoredScan { id, at: Instant::now(), data });
         }
         Ok(ScanResult {
@@ -327,8 +331,7 @@ impl CleanerManager {
         let started = Instant::now();
         let mut scan = self
             .last
-            .lock()
-            .map_err(|_| AppError::Other("cleaner state poisoned".into()))?
+            .lock_recover()
             .take()
             .filter(|s| s.id == scan_id && s.at.elapsed() < SCAN_TTL)
             .ok_or_else(|| AppError::InvalidInput("kết quả quét đã cũ hoặc không tồn tại — hãy quét lại".into()))?;
@@ -384,7 +387,8 @@ impl CleanerManager {
         // Dry-run không xoá gì => giữ kết quả quét để có thể dọn thật ngay sau đó.
         if dry_run {
             scan.at = Instant::now();
-            if let Ok(mut last) = self.last.lock() {
+            {
+                let mut last = self.last.lock_recover();
                 *last = Some(scan);
             }
         }

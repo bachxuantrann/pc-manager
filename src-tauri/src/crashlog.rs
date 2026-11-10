@@ -1,8 +1,8 @@
-//! Ghi lại panic trước khi app tắt.
+//! Ghi lại mọi panic vào crash.log để chẩn đoán.
 //!
-//! Bản release dùng `panic = "abort"`: một panic ở bất kỳ luồng nào làm cả app biến mất
-//! ngay, không để lại dấu vết. Hook này ghi nội dung lỗi, vị trí trong code và tên luồng
-//! vào `%APPDATA%\com.pcmanager.app\logs\crash.log` (giữ tối đa ~256 KB), rồi chuyển cho
+//! Release dùng `panic = "unwind"`: panic trong một tác vụ chỉ làm tác vụ đó báo lỗi
+//! (xem `sync`, `error::task_failed`), app chạy tiếp. Hook này vẫn ghi nội dung lỗi, vị trí
+//! trong code và tên luồng vào `%APPDATA%\com.pcmanager.app\logs\crash.log` (giữ tối đa ~256 KB), rồi chuyển cho
 //! hook mặc định.
 
 use std::io::Write;

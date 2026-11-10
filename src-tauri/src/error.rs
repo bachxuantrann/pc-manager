@@ -26,8 +26,18 @@ pub enum AppError {
     #[error("Lỗi cơ sở dữ liệu: {0}")]
     Db(#[from] rusqlite::Error),
 
+    /// Lỗi nội bộ (tác vụ panic). Chi tiết đã nằm trong crash.log.
+    #[error("Lỗi nội bộ khi {0}. Chi tiết đã được ghi vào crash.log — hãy thử lại.")]
+    Internal(String),
+
     #[error("{0}")]
     Other(String),
+}
+
+/// Tác vụ nền (spawn_blocking) kết thúc bất thường — thường là panic, đã được panic hook ghi lại.
+pub fn task_failed(what: &str, e: impl std::fmt::Display) -> AppError {
+    eprintln!("[{what}] tác vụ lỗi: {e}");
+    AppError::Internal(what.to_owned())
 }
 
 impl AppError {
@@ -40,6 +50,7 @@ impl AppError {
             AppError::Cancelled => "cancelled",
             AppError::Busy(_) => "busy",
             AppError::Db(_) => "db",
+            AppError::Internal(_) => "internal",
             AppError::Other(_) => "other",
         }
     }
@@ -78,5 +89,34 @@ mod tests {
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["code"], "forbidden");
         assert_eq!(v["message"], "Không được phép: csrss.exe");
+    }
+
+    /// Đúng đường đi của lỗi thật (trang Ứng dụng): panic trong pool rayon, chạy bên trong
+    /// spawn_blocking của command. Với panic = "unwind", command phải trả lỗi "internal"
+    /// cho giao diện và app chạy tiếp — không sập cả tiến trình.
+    #[test]
+    fn panic_in_background_task_becomes_error_and_app_survives() {
+        let result: AppResult<u32> = tauri::async_runtime::block_on(async {
+            tauri::async_runtime::spawn_blocking(|| -> AppResult<u32> {
+                crate::bg::pool()?.install(|| {
+                    use rayon::prelude::*;
+                    (0..64u32).into_par_iter().map(|i| if i == 37 { panic!("lỗi giả lập ở phần tử {i}") } else { i }).sum::<u32>();
+                    Ok(1)
+                })
+            })
+            .await
+            .map_err(|e| task_failed("đọc danh sách ứng dụng", e))?
+        });
+        let err = result.unwrap_err();
+        assert_eq!(err.code(), "internal");
+        assert!(err.to_string().contains("đọc danh sách ứng dụng") && err.to_string().contains("crash.log"));
+
+        // Pool nền và các tác vụ sau vẫn chạy bình thường.
+        let ok: AppResult<u32> = tauri::async_runtime::block_on(async {
+            tauri::async_runtime::spawn_blocking(|| crate::bg::pool().map(|p| p.install(|| 41 + 1)))
+                .await
+                .map_err(|e| task_failed("x", e))?
+        });
+        assert_eq!(ok.unwrap(), 42);
     }
 }

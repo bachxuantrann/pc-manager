@@ -1,6 +1,6 @@
 [package]
 name = "pc-manager"
-version = "1.0.0"
+version = "1.0.1"
 description = "PC Manager — nhẹ, nhanh, an toàn"
 edition = "2021"
 rust-version = "1.85"
@@ -58,5 +58,6 @@ features = [
 opt-level = 3
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# unwind (không phải abort): lỗi trong một tác vụ chỉ làm hỏng tác vụ đó, không làm sập cả app.
+panic = "unwind"
 strip = true

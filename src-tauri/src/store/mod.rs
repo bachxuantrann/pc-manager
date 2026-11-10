@@ -6,7 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
+use crate::sync::LockExt;
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS action_log (
@@ -51,10 +52,9 @@ impl Store {
     }
 
     fn conn(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
-        // Mutex chỉ bị poison nếu một thread panic khi đang giữ — với
-        // panic=abort ở release điều này không xảy ra; ở debug ta vẫn trả lỗi
-        // thay vì panic dây chuyền.
-        self.conn.lock().map_err(|_| AppError::Other("store mutex poisoned".into()))
+        // Mutex bị poison nếu một luồng panic khi đang giữ (release dùng panic = "unwind").
+        // Kết nối SQLite vẫn dùng được (giao dịch dở dang đã tự rollback), nên lấy lại khoá.
+        Ok(self.conn.lock_recover())
     }
 
     /// Ghi nhật ký một thao tác thay đổi hệ thống (CLAUDE.md, AN TOÀN #7).

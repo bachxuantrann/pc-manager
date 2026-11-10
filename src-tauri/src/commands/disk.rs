@@ -12,12 +12,12 @@ where
 {
     tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
         .await
-        .map_err(|e| AppError::Other(format!("disk task: {e}")))?
+        .map_err(|e| crate::error::task_failed("xử lý ổ đĩa", e))?
 }
 
 #[tauri::command]
 pub async fn disk_drives() -> AppResult<Vec<DriveInfo>> {
-    tauri::async_runtime::spawn_blocking(disk::drives).await.map_err(|e| AppError::Other(format!("disk task: {e}")))
+    tauri::async_runtime::spawn_blocking(disk::drives).await.map_err(|e| crate::error::task_failed("xử lý ổ đĩa", e))
 }
 
 /// Quét file lớn (chỉ đọc). `root` là thư mục bắt đầu quét.

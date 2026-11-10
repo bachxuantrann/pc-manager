@@ -123,7 +123,7 @@ mod tests {
     }
 
     /// Lỗi thật: đường dẫn có ký tự nhiều byte (tiếng Việt…) vắt qua byte thứ 38 (độ dài GUID)
-    /// từng làm `decoded[..38]` panic => app (panic = "abort") tắt ngay khi mở trang Ứng dụng.
+    /// từng làm `decoded[..38]` panic => app (v1.0.0 dùng panic = "abort") tắt ngay khi mở trang Ứng dụng.
     #[test]
     fn non_ascii_path_across_guid_length_does_not_panic() {
         let env = |_: &str| None;

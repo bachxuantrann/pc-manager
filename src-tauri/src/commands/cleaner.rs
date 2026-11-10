@@ -13,7 +13,7 @@ where
 {
     tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
         .await
-        .map_err(|e| AppError::Other(format!("cleaner task: {e}")))?
+        .map_err(|e| crate::error::task_failed("dọn rác", e))?
 }
 
 /// Quét theo rule. Tiến độ gửi qua `on_progress` (~10 lần/giây).

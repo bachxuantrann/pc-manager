@@ -34,7 +34,7 @@ where
 {
     tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
         .await
-        .map_err(|e| AppError::Other(format!("settings task: {e}")))?
+        .map_err(|e| crate::error::task_failed("đọc/lưu cài đặt", e))?
 }
 
 #[tauri::command]

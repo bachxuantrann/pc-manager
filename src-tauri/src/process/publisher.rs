@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::sys::process::enter_background_mode;
 use crate::sys::signature::{self, Signature};
+use crate::sync::LockExt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -50,7 +51,7 @@ impl Default for PublisherCache {
 impl PublisherCache {
     /// Kết quả đã có, hoặc `Pending` và xếp hàng kiểm tra.
     pub fn get(&self, path: &Path) -> Publisher {
-        let Ok(mut map) = self.map.lock() else { return Publisher::Unknown };
+        let mut map = self.map.lock_recover();
         match map.get(path) {
             Some(Some(sig)) => return sig.clone().into(),
             Some(None) => return Publisher::Pending,
@@ -64,20 +65,16 @@ impl PublisherCache {
 
     /// Kiểm tra đồng bộ (dùng cho Startup manager ở giai đoạn 3).
     pub fn get_blocking(&self, path: &Path) -> Publisher {
-        if let Ok(map) = self.map.lock() {
-            if let Some(Some(sig)) = map.get(path) {
-                return sig.clone().into();
-            }
+        if let Some(Some(sig)) = self.map.lock_recover().get(path) {
+            return sig.clone().into();
         }
         let sig = signature::verify(path);
-        if let Ok(mut map) = self.map.lock() {
-            map.insert(path.to_path_buf(), Some(sig.clone()));
-        }
+        self.map.lock_recover().insert(path.to_path_buf(), Some(sig.clone()));
         sig.into()
     }
 
     fn enqueue(&self, path: PathBuf) {
-        let Ok(mut tx) = self.tx.lock() else { return };
+        let mut tx = self.tx.lock_recover();
         if tx.is_none() {
             *tx = self.spawn_worker();
         }
@@ -96,13 +93,9 @@ impl PublisherCache {
             .spawn(move || {
                 enter_background_mode();
                 for path in rx {
-                    let sig = signature::verify(&path);
-                    match map.lock() {
-                        Ok(mut m) => {
-                            m.insert(path, Some(sig));
-                        }
-                        Err(_) => return,
-                    }
+                    // Một file lỗi khi kiểm tra chữ ký không làm chết cả luồng kiểm tra.
+                    let Some(sig) = crate::sync::survive("publisher-verify", || signature::verify(&path)) else { continue };
+                    map.lock_recover().insert(path, Some(sig));
                 }
             })
             .ok()?;

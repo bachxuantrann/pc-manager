@@ -14,6 +14,7 @@ pub mod crashlog;
 pub mod error;
 pub mod settings;
 pub mod state;
+pub mod sync;
 pub mod sys;
 mod tray;
 
@@ -42,10 +43,13 @@ fn spawn_auto_smart_boost(app: AppHandle) {
         .name("auto-smart-boost".into())
         .spawn(move || loop {
             std::thread::sleep(AUTO_SMART_INTERVAL);
-            let state = app.state::<AppState>();
-            if let Some(report) = state.memory.auto_tick(&state.store, AUTO_SMART_COOLDOWN) {
-                let _ = app.emit(commands::memory::EVENT_BOOSTED, &report);
-            }
+            // Một lượt lỗi không làm chết luồng (sync::survive).
+            sync::survive("auto-smart-boost", || {
+                let state = app.state::<AppState>();
+                if let Some(report) = state.memory.auto_tick(&state.store, AUTO_SMART_COOLDOWN) {
+                    let _ = app.emit(commands::memory::EVENT_BOOSTED, &report);
+                }
+            });
         })
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("không tạo được thread auto smart boost: {e}"));
@@ -62,7 +66,7 @@ fn spawn_usage_sampler(app: AppHandle) {
             sys::process::enter_background_mode();
             let mut sampler = usage::sampler::Sampler::default();
             loop {
-                sampler.tick(&app.state::<AppState>().store);
+                sync::survive("usage-sampler", || sampler.tick(&app.state::<AppState>().store));
                 std::thread::sleep(USAGE_SAMPLE_INTERVAL);
             }
         })
@@ -86,14 +90,16 @@ fn spawn_auto_clean(app: AppHandle) {
             if !cfg.due(settings::now_ms()) {
                 continue;
             }
-            let result = state.cleaner.auto_clean(&state.store, &cfg.rule_ids);
+            // Ghi mốc chạy TRƯỚC khi dọn: nếu lượt này lỗi thì đợi tới kỳ sau, không lặp lỗi mỗi 30 phút.
+            cfg.last_run_ms = Some(settings::now_ms());
+            let _ = cfg.save(&state.store);
+            let result = sync::survive("auto-clean", || state.cleaner.auto_clean(&state.store, &cfg.rule_ids))
+                .unwrap_or_else(|| Err(error::AppError::Internal("dọn rác tự động".into())));
             let detail = match &result {
                 Ok(r) => format!("{} file, {} byte", r.deleted_files, r.freed_bytes),
                 Err(e) => e.to_string(),
             };
             state.store.log_action_best_effort("cleaner.auto", &cfg.rule_ids.join(","), result.is_ok(), &detail);
-            cfg.last_run_ms = Some(settings::now_ms());
-            let _ = cfg.save(&state.store);
         })
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("không tạo được thread auto clean: {e}"));
@@ -107,7 +113,9 @@ fn spawn_show_listener(app: AppHandle, guard: sys::instance::InstanceGuard) {
         .spawn(move || loop {
             if guard.wait_show(Duration::from_secs(3600)) {
                 let handle = app.clone();
-                let _ = app.run_on_main_thread(move || tray::show_main_window(&handle));
+                let _ = app.run_on_main_thread(move || {
+                    sync::survive("show-window", || tray::show_main_window(&handle));
+                });
             }
         })
         .map(|_| ())
@@ -116,7 +124,7 @@ fn spawn_show_listener(app: AppHandle, guard: sys::instance::InstanceGuard) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Ghi panic ra crash.log trước khi app tắt (release dùng panic = "abort").
+    // Ghi mọi panic ra crash.log để chẩn đoán (app chạy tiếp nhờ panic = "unwind").
     crashlog::install();
     let tray_only = std::env::args().any(|a| a == settings::TRAY_ARG);
     // Vừa được chạy lại với quyền admin: chờ bản cũ thoát hẳn (nhả mutex, và WebView2

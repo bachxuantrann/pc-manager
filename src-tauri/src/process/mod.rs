@@ -18,6 +18,7 @@ use crate::store::Store;
 use crate::sys::process::{self as sysproc, Access, PriorityClass, ProcessHandle, RawProcess};
 use guard::Op;
 use publisher::{Publisher, PublisherCache};
+use crate::sync::LockExt;
 
 /// Danh tính tiến trình = pid + thời điểm tạo (chống PID bị tái sử dụng).
 /// `create_time` là chuỗi vì FILETIME vượt 2^53 (JS number mất chính xác).
@@ -104,7 +105,7 @@ impl ProcessManager {
     pub fn snapshot(&self) -> AppResult<ProcessSnapshot> {
         let raw = sysproc::enumerate()?;
         let now = Instant::now();
-        let mut s = self.sampler.lock().map_err(|_| AppError::Other("sampler poisoned".into()))?;
+        let mut s = self.sampler.lock_recover();
         let elapsed = s.last.map_or(0, |t| u64::try_from(now.duration_since(t).as_nanos() / 100).unwrap_or(u64::MAX));
 
         let mut prev_cpu = HashMap::with_capacity(raw.len());

@@ -23,6 +23,7 @@ use crate::error::{AppError, AppResult};
 use crate::store::Store;
 use crate::sys;
 use walk::FileEntry;
+use crate::sync::LockExt;
 
 const SCAN_TTL: Duration = Duration::from_secs(30 * 60);
 pub const LARGE_LIMIT: usize = 300;
@@ -263,7 +264,7 @@ impl Throttle {
         Self { last: Mutex::new(Instant::now()) }
     }
     fn ready(&self) -> bool {
-        let Ok(mut l) = self.last.try_lock() else { return false };
+        let Some(mut l) = self.last.try_lock_recover() else { return false };
         if l.elapsed() >= Duration::from_millis(125) {
             *l = Instant::now();
             true
@@ -279,7 +280,7 @@ impl DiskManager {
     }
 
     fn begin(&self) -> AppResult<std::sync::MutexGuard<'_, ()>> {
-        let g = self.running.try_lock().map_err(|_| AppError::Busy("đang có một lần quét đĩa khác".into()))?;
+        let g = self.running.try_lock_recover().ok_or_else(|| AppError::Busy("đang có một lần quét đĩa khác".into()))?;
         self.cancel.store(false, Ordering::Relaxed);
         Ok(g)
     }

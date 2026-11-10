@@ -65,7 +65,9 @@ pc-manager/
 - Release: `npm run tauri build` → installer NSIS ở `src-tauri/target/release/bundle/nsis/` (chỉ NSIS trên Windows — đặt trong `tauri.windows.conf.json`; NSIS có hook xoá task khởi động khi gỡ, MSI không có).
 - Trước khi báo xong một task: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run build` đều phải pass.
 - Test cần quyền admin: đánh dấu `#[ignore = "cần quyền Administrator…"]`, chạy bằng `scripts/admin-test.ps1` (UAC hỏi mỗi lần, người dùng bấm Yes). Không tìm cách bỏ qua UAC.
-- Release profile: `opt-level=3, lto="fat", codegen-units=1, panic="abort", strip=true`.
+- Release profile: `opt-level=3, lto="fat", codegen-units=1, panic="unwind", strip=true`. **Không đổi lại `abort`** (quyết định của người dùng): với abort, một panic ở bất kỳ luồng nào làm cả app tắt không dấu vết (lỗi thật ở v1.0.0).
+- Chịu lỗi panic: khoá dùng `crate::sync::LockExt` (`lock_recover`/`try_lock_recover`, không coi mutex poisoned là lỗi vĩnh viễn); vòng lặp luồng nền bọc `sync::survive`; JoinError của `spawn_blocking` map bằng `error::task_failed` (lỗi `internal` thân thiện). Mọi panic được `crashlog` ghi vào `%APPDATA%\com.pcmanager.app\logs\crash.log`.
+- Cắt chuỗi: không dùng `s[..n]` với vị trí có thể rơi giữa ký tự Unicode — dùng `s.get(..n)`; tìm vị trí trên bản `to_ascii_lowercase()` (giữ độ dài byte), không phải `to_lowercase()`.
 - Mục tiêu hiệu năng: RAM của tiến trình Rust < 30MB khi rảnh; installer < 10MB.
 
 ## Lưu ý manifest (build.rs)

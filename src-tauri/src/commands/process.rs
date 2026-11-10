@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Manager};
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::process::{ActionOutcome, ProcessOp, ProcessRef, ProcessSnapshot};
 use crate::state::AppState;
 use crate::sys::process::PriorityClass;
@@ -13,7 +13,7 @@ where
 {
     tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
         .await
-        .map_err(|e| AppError::Other(format!("process task: {e}")))?
+        .map_err(|e| crate::error::task_failed("xử lý tiến trình", e))?
 }
 
 #[tauri::command]

@@ -17,7 +17,7 @@ pub async fn apps_list(app: AppHandle) -> AppResult<AppsOverview> {
         crate::bg::pool()?.install(|| usage::list(&state.store))
     })
     .await
-    .map_err(|e| AppError::Other(format!("apps task: {e}")))?
+    .map_err(|e| crate::error::task_failed("đọc danh sách ứng dụng", e))?
 }
 
 /// Phát ra khi trình gỡ cài đặt (và mọi tiến trình con) đã kết thúc.
@@ -47,7 +47,7 @@ pub async fn apps_uninstall(app: AppHandle, id: String) -> AppResult<String> {
     let handle = app.clone();
     let started = tauri::async_runtime::spawn_blocking(move || usage::uninstall(&handle.state::<AppState>().store, &id))
         .await
-        .map_err(|e| AppError::Other(format!("apps task: {e}")))??;
+        .map_err(|e| crate::error::task_failed("đọc danh sách ứng dụng", e))??;
     let started_at = SystemTime::now();
     let name = started.app.name.clone();
     // Chụp lại thông tin app: trình gỡ sẽ xoá key registry, nhưng vẫn cần biết thư mục cài để dọn sót.
@@ -84,7 +84,7 @@ pub async fn apps_leftovers_scan(app: AppHandle, id: String) -> AppResult<Leftov
         app.state::<AppState>().leftovers.scan(&id)
     })
     .await
-    .map_err(|e| AppError::Other(format!("leftovers task: {e}")))?
+    .map_err(|e| crate::error::task_failed("dọn phần còn sót", e))?
 }
 
 /// Chuyển các mục đã chọn vào Thùng rác (key registry: sao lưu .reg rồi xoá).
@@ -99,5 +99,5 @@ pub async fn apps_leftovers_clean(app: AppHandle, scan_id: u64, item_ids: Vec<u3
         state.leftovers.clean(&state.store, scan_id, &item_ids)
     })
     .await
-    .map_err(|e| AppError::Other(format!("leftovers task: {e}")))?
+    .map_err(|e| crate::error::task_failed("dọn phần còn sót", e))?
 }

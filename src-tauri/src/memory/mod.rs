@@ -13,6 +13,7 @@ use crate::error::{AppError, AppResult};
 use crate::store::Store;
 use crate::sys::memory::{self as sysmem, MemoryListCommand};
 use crate::sys::token;
+use crate::sync::LockExt;
 
 const KEY_THRESHOLD: &str = "memory.smart_threshold_pct";
 const KEY_AUTO: &str = "memory.smart_auto";
@@ -138,7 +139,7 @@ impl MemoryManager {
 
     /// Thời điểm Boost gần nhất (để auto Smart Boost có cooldown).
     pub fn last_boost(&self) -> Option<Instant> {
-        self.boost_lock.try_lock().ok().and_then(|g| *g)
+        self.boost_lock.try_lock_recover().and_then(|g| *g)
     }
 
     /// Flush modified list rồi purge standby (toàn bộ hoặc ưu tiên thấp tuỳ `mode`).
