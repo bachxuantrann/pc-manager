@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+-- PC Manager tự lấy mẫu tiến trình đang chạy mỗi 60s (nguồn 'lần dùng cuối').
+CREATE TABLE IF NOT EXISTS app_usage (
+    exe_path   TEXT PRIMARY KEY,       -- viết thường
+    first_seen INTEGER NOT NULL,       -- unix ms
+    last_seen  INTEGER NOT NULL
+);
 ";
 
 /// Kết nối SQLite dùng chung. `Mutex` vì `rusqlite::Connection` không `Sync`.
@@ -100,6 +106,36 @@ impl Store {
         Ok(())
     }
 
+    /// Ghi nhận các exe đang chạy (một transaction cho cả lô).
+    pub fn record_usage(&self, exe_paths: &[String], at_ms: i64) -> AppResult<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT INTO app_usage (exe_path, first_seen, last_seen) VALUES (?1, ?2, ?2)
+                 ON CONFLICT(exe_path) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)",
+            )?;
+            for p in exe_paths {
+                stmt.execute(params![p.to_lowercase(), at_ms])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// (exe viết thường, last_seen ms).
+    pub fn usage(&self) -> AppResult<Vec<(String, i64)>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare("SELECT exe_path, last_seen FROM app_usage")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Thời điểm bắt đầu theo dõi (mẫu đầu tiên), để UI giải thích "chưa thấy dùng".
+    pub fn usage_since(&self) -> AppResult<Option<i64>> {
+        Ok(self.conn()?.query_row("SELECT MIN(first_seen) FROM app_usage", [], |r| r.get(0))?)
+    }
+
     /// Đọc setting rồi parse; thiếu hoặc sai định dạng thì dùng `default`.
     pub fn setting_or<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
         self.get_setting(key)
@@ -139,6 +175,18 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert!(!rows[0].ok);
         assert_eq!(rows[1].detail, "freed 10MB");
+    }
+
+    #[test]
+    fn usage_keeps_latest_and_first_seen() {
+        let s = Store::in_memory().unwrap();
+        s.record_usage(&[r"C:\App\A.exe".into()], 1000).unwrap();
+        s.record_usage(&[r"c:\app\a.exe".into(), r"C:\B.exe".into()], 5000).unwrap();
+        s.record_usage(&[r"C:\App\A.exe".into()], 3000).unwrap(); // mẫu cũ đến muộn
+        let mut u = s.usage().unwrap();
+        u.sort();
+        assert_eq!(u, vec![(r"c:\app\a.exe".into(), 5000), (r"c:\b.exe".into(), 5000)]);
+        assert_eq!(s.usage_since().unwrap(), Some(1000));
     }
 
     #[test]

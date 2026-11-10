@@ -14,7 +14,7 @@ pub mod safety;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, TryLockError};
+use std::sync::{Arc, Mutex, TryLockError};
 use std::time::{Duration, Instant, SystemTime};
 
 use rayon::prelude::*;
@@ -123,7 +123,6 @@ pub struct CleanerManager {
     last: Mutex<Option<StoredScan>>,
     cancel: Arc<AtomicBool>,
     running: Mutex<()>,
-    pool: OnceLock<rayon::ThreadPool>,
     next_id: AtomicU64,
     env: fn(&str) -> Option<String>,
 }
@@ -141,7 +140,6 @@ impl CleanerManager {
             last: Mutex::new(None),
             cancel: Arc::new(AtomicBool::new(false)),
             running: Mutex::new(()),
-            pool: OnceLock::new(),
             next_id: AtomicU64::new(1),
             env: real_env,
         }
@@ -159,20 +157,9 @@ impl CleanerManager {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
-    /// Pool rayon riêng: max(2, cpus/2) thread, mỗi thread ở chế độ nền
-    /// (CPU + I/O ưu tiên thấp) để không làm giật máy.
-    fn pool(&self) -> AppResult<&rayon::ThreadPool> {
-        if let Some(p) = self.pool.get() {
-            return Ok(p);
-        }
-        let cpus = std::thread::available_parallelism().map_or(2, |n| n.get());
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads((cpus / 2).max(2))
-            .thread_name(|i| format!("cleaner-{i}"))
-            .start_handler(|_| sys::process::enter_background_mode())
-            .build()
-            .map_err(|e| AppError::Other(format!("không tạo được thread pool: {e}")))?;
-        Ok(self.pool.get_or_init(|| pool))
+    /// Pool nền dùng chung (max(2, cpus/2) thread ưu tiên thấp).
+    fn pool(&self) -> AppResult<&'static rayon::ThreadPool> {
+        crate::bg::pool()
     }
 
     fn lock_running(&self) -> AppResult<std::sync::MutexGuard<'_, ()>> {

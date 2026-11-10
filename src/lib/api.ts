@@ -221,6 +221,32 @@ export interface CleanReport {
   cancelled: boolean;
 }
 
+// ---- Apps -----------------------------------------------------------------
+
+export type UsageSource = "userAssist" | "prefetch" | "pcManager";
+
+export interface InstalledApp {
+  /** Key registry (HKLM\..., HKCU\...) — chỉ dùng làm định danh. */
+  id: string;
+  name: string;
+  publisher: string | null;
+  version: string | null;
+  installDateMs: number | null;
+  sizeBytes: number | null;
+  sizeMeasured: boolean;
+  installLocation: string | null;
+  lastUsedMs: number | null;
+  lastUsedSource: UsageSource | null;
+  canUninstall: boolean;
+}
+
+export interface AppsOverview {
+  apps: InstalledApp[];
+  userassistEntries: number;
+  prefetchEntries: number | null;
+  trackingSinceMs: number | null;
+}
+
 function channel<T>(cb: (v: T) => void): Channel<T> {
   const ch = new Channel<T>();
   ch.onmessage = cb;
@@ -265,6 +291,10 @@ export const api = {
   cleanerClean: (scanId: number, ruleIds: string[], dryRun: boolean, onProgress: (p: CleanerProgress) => void) =>
     invoke<CleanReport>("cleaner_clean", { scanId, ruleIds, dryRun, onProgress: channel(onProgress) }),
   cleanerCancel: () => invoke<void>("cleaner_cancel"),
+
+  appsList: () => invoke<AppsOverview>("apps_list"),
+  /** Mở trình gỡ cài đặt của app; trả về tên app. */
+  appsUninstall: (id: string) => invoke<string>("apps_uninstall", { id }),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

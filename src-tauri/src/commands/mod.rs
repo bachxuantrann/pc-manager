@@ -1,5 +1,6 @@
 //! Tauri commands: mỏng — validate input → gọi module → map lỗi.
 
+pub mod apps;
 pub mod cleaner;
 pub mod memory;
 pub mod process;

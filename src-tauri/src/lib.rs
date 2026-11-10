@@ -8,6 +8,7 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod bg;
 pub mod commands;
 pub mod error;
 pub mod state;
@@ -48,6 +49,25 @@ fn spawn_auto_smart_boost(app: AppHandle) {
         .unwrap_or_else(|e| eprintln!("không tạo được thread auto smart boost: {e}"));
 }
 
+/// Lấy mẫu tiến trình đang chạy mỗi 60s (kể cả khi cửa sổ ẩn ở tray) để biết
+/// "lần dùng cuối" của ứng dụng. Chỉ mở handle cho tiến trình mới.
+const USAGE_SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
+
+fn spawn_usage_sampler(app: AppHandle) {
+    std::thread::Builder::new()
+        .name("usage-sampler".into())
+        .spawn(move || {
+            sys::process::enter_background_mode();
+            let mut sampler = usage::sampler::Sampler::default();
+            loop {
+                sampler.tick(&app.state::<AppState>().store);
+                std::thread::sleep(USAGE_SAMPLE_INTERVAL);
+            }
+        })
+        .map(|_| ())
+        .unwrap_or_else(|e| eprintln!("không tạo được thread usage sampler: {e}"));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let result = tauri::Builder::default()
@@ -56,6 +76,7 @@ pub fn run() {
             app.manage(AppState::init(data_dir.as_deref()));
             tray::setup(app.handle())?;
             spawn_auto_smart_boost(app.handle().clone());
+            spawn_usage_sampler(app.handle().clone());
             Ok(())
         })
         // Bấm X => ẩn xuống tray thay vì thoát. Thoát qua menu tray.
@@ -87,6 +108,8 @@ pub fn run() {
             commands::cleaner::cleaner_scan,
             commands::cleaner::cleaner_clean,
             commands::cleaner::cleaner_cancel,
+            commands::apps::apps_list,
+            commands::apps::apps_uninstall,
         ])
         .build(tauri::generate_context!());
 
