@@ -11,6 +11,7 @@ Quy tắc cho AI agent: [CLAUDE.md](CLAUDE.md). Lộ trình theo giai đoạn: [
 npm install
 npm run tauri dev      # quyền thường; cần thử chức năng admin: bấm "Chạy với quyền Administrator" trong app
 npm run tauri build    # installer NSIS ở src-tauri/target/release/bundle/nsis/
+npx tauri icon app-icon.svg -o src-tauri/icons   # tạo lại icon từ app-icon.svg (xoá thư mục android/ios sinh thêm)
 ```
 
 ## Kiểm tra trước khi xong một giai đoạn

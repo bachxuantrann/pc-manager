@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 128 128">
+  <!-- PC Manager — "vòng sức khoẻ": nền xanh bo góc, vòng tiến độ + dấu tích.
+       Nguồn gốc của mọi icon: `npx tauri icon app-icon.svg` (xem README). -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#185FA5"/>
+  <circle cx="64" cy="64" r="36" fill="none" stroke="#378ADD" stroke-width="12"/>
+  <path d="M64 28 A36 36 0 1 1 30 76" fill="none" stroke="#E6F1FB" stroke-width="12" stroke-linecap="round"/>
+  <path d="M50 64 L60 74 L80 52" fill="none" stroke="#E6F1FB" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
