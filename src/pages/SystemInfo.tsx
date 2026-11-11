@@ -22,6 +22,13 @@ function uptime(secs: number): string {
   return d > 0 ? `${d} ngày ${h} giờ` : h > 0 ? `${h} giờ ${m} phút` : `${m} phút`;
 }
 
+/** Mốc thời gian cách đây `secs` giây: "hôm nay 12:53" / "30/10/2026 07:57". */
+function ago(secs: number): string {
+  const t = new Date(Date.now() - secs * 1000);
+  const hm = t.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return t.toDateString() === new Date().toDateString() ? `hôm nay ${hm}` : `${t.toLocaleDateString("vi-VN")} ${hm}`;
+}
+
 const join = (parts: (string | null | undefined | false)[], sep = " · ") => parts.filter(Boolean).join(sep);
 
 function slotText(s: MemorySlot): string {
@@ -81,7 +88,7 @@ async function copyText(text: string): Promise<void> {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-3 py-1.5 text-sm">
-      <div className="w-32 shrink-0 opacity-60">{label}</div>
+      <div className="w-40 shrink-0 opacity-60">{label}</div>
       <div className="min-w-0 flex-1 break-words">{children ?? "—"}</div>
     </div>
   );
@@ -152,7 +159,22 @@ export default function SystemInfoPage() {
             <Row label="Build">{w?.build}</Row>
             <Row label="Kiến trúc">{w?.architecture}</Row>
             <Row label="Ngày cài">{w?.installDateMs ? formatDate(w.installDateMs) : null}</Row>
-            <Row label="Đã chạy liên tục">{w ? uptime(w.uptimeSecs) : null}</Row>
+            {w && (
+              <Row label="Thức dậy gần nhất">
+                {/* Sleep, Hibernate, hoặc bật máy khi Fast Startup đang bật. */}
+                {w.sinceWakeSecs != null ? `${ago(w.sinceWakeSecs)} (${uptime(w.sinceWakeSecs)} trước)` : "chưa thức dậy lần nào từ lần khởi động lại"}
+              </Row>
+            )}
+            {w && (
+              <Row label="Khởi động lại gần nhất">
+                {ago(w.uptimeSecs)} ({uptime(w.uptimeSecs)} trước)
+                {w.fastStartup && (
+                  <div className="mt-0.5 text-xs opacity-60">
+                    Fast Startup đang bật: Shut down rồi mở máy không khởi động lại hẳn Windows. Muốn làm mới hoàn toàn, hãy chọn Restart.
+                  </div>
+                )}
+              </Row>
+            )}
           </Card>
           <Card title="CPU">
             <Row label="Tên">{c?.name}</Row>

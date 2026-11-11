@@ -422,7 +422,11 @@ export interface WindowsInfo {
   displayVersion: string | null;
   build: string | null;
   installDateMs: number | null;
+  /** Từ lần khởi động THẬT gần nhất (Restart). Fast Startup: Shut down không đặt lại. */
   uptimeSecs: number;
+  /** Từ lần mở máy / thức dậy gần nhất; null = chưa thức dậy lần nào kể từ lần khởi động thật. */
+  sinceWakeSecs: number | null;
+  fastStartup: boolean | null;
   architecture: string;
 }
 export interface CpuInfo {

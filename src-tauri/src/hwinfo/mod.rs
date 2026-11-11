@@ -20,7 +20,13 @@ pub struct WindowsInfo {
     /// vd "26100.4061".
     pub build: Option<String>,
     pub install_date_ms: Option<i64>,
+    /// Từ lần khởi động THẬT gần nhất (Restart). Với Fast Startup, Shut down không đặt lại số này.
     pub uptime_secs: u64,
+    /// Từ lần mở máy / thức dậy gần nhất (Sleep, Hibernate, bật máy khi có Fast Startup). None = chưa
+    /// thức dậy lần nào kể từ lần khởi động thật.
+    pub since_wake_secs: Option<u64>,
+    /// Fast Startup đang bật (Shut down = ngủ đông nhân Windows, không khởi động lại hẳn).
+    pub fast_startup: Option<bool>,
     pub architecture: &'static str,
 }
 
@@ -104,6 +110,12 @@ fn windows_info() -> WindowsInfo {
         build: build_no.map(|b| ubr.map_or_else(|| b.to_string(), |u| format!("{b}.{u}"))),
         install_date_ms: key.as_ref().and_then(|k| k.get_u32("InstallDate").ok()).filter(|&t| t > 0).map(|t| i64::from(t) * 1000),
         uptime_secs: sys::firmware::uptime_secs(),
+        since_wake_secs: sys::firmware::secs_since_last_wake(),
+        fast_startup: LOCAL_MACHINE
+            .open(r"SYSTEM\CurrentControlSet\Control\Session Manager\Power")
+            .and_then(|k| k.get_u32("HiberbootEnabled"))
+            .ok()
+            .map(|v| v != 0),
         architecture: if cfg!(target_arch = "x86_64") { "x64" } else { "khác" },
     }
 }

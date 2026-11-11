@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { Spinner } from "./Button";
 import { IconActivity, IconChip, IconDisk, IconGrid, IconHome, IconMonitor, IconPower, IconSettings, IconShield, IconSparkle } from "./Icons";
 import { ElevateButton, useElevation } from "./Elevation";
+import appIcon from "../../app-icon.svg";
 
 export type PageId =
   | "dashboard"
@@ -41,9 +42,8 @@ export default function Sidebar({ current, onSelect, busy = [] }: Props) {
         dark:border-white/[0.06] dark:bg-[#0a0d13]/90"
     >
       <div className="mb-5 flex items-center gap-2 px-3 pt-3">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-white">
-          <IconShield className="h-4 w-4" />
-        </span>
+        {/* Icon thật của app (nguồn của mọi icon: app-icon.svg) — nhỏ nên Vite nhúng thẳng vào JS. */}
+        <img src={appIcon} alt="" className="h-7 w-7 shrink-0" draggable={false} />
         <span className="text-[17px] font-semibold tracking-tight">PC Manager</span>
       </div>
       {ITEMS.map((it) => {

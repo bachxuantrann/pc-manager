@@ -30,6 +30,30 @@ pub fn uptime_secs() -> u64 {
     ms / 1000
 }
 
+/// Số giây kể từ lần máy **thức dậy** gần nhất (từ Sleep, Hibernate, hoặc bật máy khi Fast Startup
+/// đang bật — "Shut down" khi đó thực ra là ngủ đông nhân Windows). `None` = chưa thức dậy lần nào
+/// kể từ lần khởi động thật (tức uptime đã là thời gian từ lúc bật máy).
+pub fn secs_since_last_wake() -> Option<u64> {
+    let mut wake: u64 = 0;
+    // SAFETY: không có input; output trỏ tới một u64 trên stack, độ dài khai báo đúng 8 byte.
+    let status = unsafe {
+        super::ntdll::NtPowerInformation(
+            super::ntdll::POWER_LAST_WAKE_TIME,
+            std::ptr::null(),
+            0,
+            std::ptr::from_mut(&mut wake).cast(),
+            u32::try_from(std::mem::size_of::<u64>()).ok()?,
+        )
+    };
+    if status.is_err() || wake == 0 {
+        return None;
+    }
+    // Cùng gốc thời gian (từ lúc khởi động, tính cả lúc ngủ): tick count (ms) và interrupt time (100ns).
+    // SAFETY: không tham số, chỉ đọc bộ đếm của hệ thống.
+    let now_ms = unsafe { GetTickCount64() };
+    Some((now_ms / 1000).saturating_sub(wake / 10_000_000))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
