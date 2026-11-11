@@ -58,7 +58,7 @@ pub async fn apps_uninstall(app: AppHandle, id: String) -> AppResult<String> {
     let handle = app.clone();
     let started = tauri::async_runtime::spawn_blocking(move || usage::uninstall(&handle.state::<AppState>().store, &id))
         .await
-        .map_err(|e| crate::error::task_failed("đọc danh sách ứng dụng", e))??;
+        .map_err(|e| crate::error::task_failed("mở trình gỡ cài đặt", e))??;
     let started_at = SystemTime::now();
     let name = started.app.name.clone();
     // Chụp lại thông tin app: trình gỡ sẽ xoá key registry, nhưng vẫn cần biết thư mục cài để dọn sót.

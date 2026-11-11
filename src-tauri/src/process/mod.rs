@@ -272,7 +272,10 @@ fn load_details(p: &RawProcess) -> Details {
 
 fn open_in_explorer(path: &std::path::Path) -> AppResult<()> {
     // Đường dẫn lấy từ OS (không chứa dấu "), nên bọc ngoặc kép là an toàn.
-    std::process::Command::new("explorer.exe")
+    // Đường dẫn tuyệt đối: không để PATH / thư mục hiện tại quyết định chương trình nào chạy
+    // (app có thể đang có quyền Administrator).
+    let explorer = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("explorer.exe");
+    std::process::Command::new(explorer)
         .raw_arg(format!("/select,\"{}\"", path.display()))
         .spawn()?;
     Ok(())

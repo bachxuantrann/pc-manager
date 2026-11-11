@@ -287,7 +287,7 @@ impl DiskManager {
 
     fn store(&self, files: HashMap<u32, Stored>) -> u64 {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        *self.last.lock().unwrap_or_else(|e| e.into_inner()) = Some(StoredScan { id, at: Instant::now(), files });
+        *self.last.lock_recover() = Some(StoredScan { id, at: Instant::now(), files });
         id
     }
 
@@ -440,7 +440,7 @@ impl DiskManager {
     pub fn recycle(&self, store: &Store, scan_id: u64, ids: &[u32]) -> AppResult<RecycleReport> {
         let _g = self.begin()?;
         let scan = {
-            let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+            let mut last = self.last.lock_recover();
             match last.take() {
                 Some(s) if s.id == scan_id && s.at.elapsed() < SCAN_TTL => s,
                 other => {
@@ -474,7 +474,7 @@ impl DiskManager {
         for o in report.items.iter().filter(|o| o.ok) {
             files.remove(&o.id);
         }
-        *self.last.lock().unwrap_or_else(|e| e.into_inner()) = Some(StoredScan { id: scan.id, at: scan.at, files });
+        *self.last.lock_recover() = Some(StoredScan { id: scan.id, at: scan.at, files });
         Ok(report)
     }
 }

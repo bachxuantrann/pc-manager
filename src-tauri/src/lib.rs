@@ -22,7 +22,7 @@ pub mod sys;
 pub mod user;
 mod tray;
 
-// Các module chức năng — được lấp đầy qua từng giai đoạn (xem PROMPTS.md).
+// Các module chức năng.
 pub mod cleaner;
 pub mod disk;
 pub mod memory;
@@ -95,10 +95,19 @@ fn spawn_auto_clean(app: AppHandle) {
                 continue;
             }
             // Ghi mốc chạy TRƯỚC khi dọn: nếu lượt này lỗi thì đợi tới kỳ sau, không lặp lỗi mỗi 30 phút.
+            let previous_run = cfg.last_run_ms;
             cfg.last_run_ms = Some(settings::now_ms());
             let _ = cfg.save(&state.store);
             let result = sync::survive("auto-clean", || state.cleaner.auto_clean(&state.store, &cfg.rule_ids))
                 .unwrap_or_else(|| Err(error::AppError::Internal("dọn rác tự động".into())));
+            // Người dùng đang quét/dọn tay => lượt này chưa chạy: trả lại mốc cũ để lần kiểm tra sau
+            // (30 phút) thử lại, thay vì bỏ cả kỳ (1/7/30 ngày). Đọc lại cài đặt vì có thể vừa bị đổi.
+            if matches!(result, Err(error::AppError::Busy(_))) {
+                let mut latest = settings::AutoClean::load(&state.store);
+                latest.last_run_ms = previous_run;
+                let _ = latest.save(&state.store);
+                continue;
+            }
             let detail = match &result {
                 Ok(r) => format!("{} file, {} byte", r.deleted_files, r.freed_bytes),
                 Err(e) => e.to_string(),
@@ -109,7 +118,6 @@ fn spawn_auto_clean(app: AppHandle) {
         .unwrap_or_else(|e| eprintln!("không tạo được thread auto clean: {e}"));
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Luồng nhận yêu cầu "hiện cửa sổ" khi người dùng mở app lần nữa.
 fn spawn_show_listener(app: AppHandle, guard: sys::instance::InstanceGuard) {
     std::thread::Builder::new()

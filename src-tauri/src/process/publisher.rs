@@ -63,16 +63,6 @@ impl PublisherCache {
         Publisher::Pending
     }
 
-    /// Kiểm tra đồng bộ (dùng cho Startup manager ở giai đoạn 3).
-    pub fn get_blocking(&self, path: &Path) -> Publisher {
-        if let Some(Some(sig)) = self.map.lock_recover().get(path) {
-            return sig.clone().into();
-        }
-        let sig = signature::verify(path);
-        self.map.lock_recover().insert(path.to_path_buf(), Some(sig.clone()));
-        sig.into()
-    }
-
     fn enqueue(&self, path: PathBuf) {
         let mut tx = self.tx.lock_recover();
         if tx.is_none() {

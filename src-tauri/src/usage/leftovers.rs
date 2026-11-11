@@ -19,6 +19,7 @@ use super::{dir_size, parse_uninstall, usable_location};
 use crate::cleaner::safety::{is_link_or_cloud, norm, BanCtx};
 use crate::error::{AppError, AppResult};
 use crate::store::Store;
+use crate::sync::LockExt;
 use crate::sys::com::ComGuard;
 use crate::sys::{process, shell};
 
@@ -609,7 +610,7 @@ impl LeftoverManager {
 
     /// Ghi nhớ app trước khi gỡ. Dữ liệu lấy từ registry phía backend, không từ UI.
     pub fn remember(&self, app: Installed) {
-        let mut s = self.snapshots.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.snapshots.lock_recover();
         if s.len() >= 32 {
             s.clear();
         }
@@ -620,7 +621,7 @@ impl LeftoverManager {
         let current = installed::find(app_id);
         let key_exists = current.is_some();
         let app = current
-            .or_else(|| self.snapshots.lock().unwrap_or_else(|e| e.into_inner()).get(app_id).cloned())
+            .or_else(|| self.snapshots.lock_recover().get(app_id).cloned())
             .ok_or_else(|| AppError::NotFound("ứng dụng không còn trong danh sách".into()))?;
         let (items, uninstaller_exists, dependencies) = scan_app(&app, key_exists);
         let scan_id = self.next_id.fetch_add(1, Ordering::Relaxed);
@@ -632,14 +633,14 @@ impl LeftoverManager {
             dependencies,
         };
         let stored = Stored { scan_id, app_id: app.id, app_name: app.name, install_location: app.install_location, created: Instant::now(), items };
-        *self.stored.lock().unwrap_or_else(|e| e.into_inner()) = Some(stored);
+        *self.stored.lock_recover() = Some(stored);
         Ok(out)
     }
 
     /// Dọn các mục `ids` của lần quét `scan_id` (dùng một lần).
     pub fn clean(&self, store: &Store, scan_id: u64, ids: &[u32]) -> AppResult<LeftoverReport> {
         let stored = {
-            let mut g = self.stored.lock().unwrap_or_else(|e| e.into_inner());
+            let mut g = self.stored.lock_recover();
             match g.take() {
                 Some(s) if s.scan_id == scan_id && s.created.elapsed() < SCAN_TTL => s,
                 other => {

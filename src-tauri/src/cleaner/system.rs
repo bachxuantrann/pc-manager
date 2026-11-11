@@ -185,6 +185,14 @@ fn system_drive_letter() -> char {
     std::env::var("SystemDrive").ok().and_then(|d| d.chars().next()).unwrap_or('C')
 }
 
+fn windows_old_path() -> PathBuf {
+    PathBuf::from(format!("{}:\\Windows.old", system_drive_letter()))
+}
+
+fn windows_old_exists() -> bool {
+    std::fs::symlink_metadata(windows_old_path()).is_ok_and(|m| m.is_dir())
+}
+
 fn system_free() -> u64 {
     sys::disk::drive(system_drive_letter()).free
 }
@@ -337,8 +345,8 @@ impl SystemCleaner {
     }
 
     pub fn windows_old_info(&self) -> WindowsOldInfo {
-        let path = PathBuf::from(format!("{}:\\Windows.old", system_drive_letter()));
-        let exists = std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir());
+        let path = windows_old_path();
+        let exists = windows_old_exists();
         let bytes = exists.then(|| {
             let mut total = 0u64;
             let _ = crate::disk::walk::walk(&path, &AtomicBool::new(false), |f| total += f.size);
@@ -379,7 +387,8 @@ impl SystemCleaner {
         // Luôn gỡ cờ để lần chạy Disk Cleanup sau của người dùng không bị ảnh hưởng.
         let _ = key.remove_value(&flag);
         let code = status?.code().unwrap_or(-1);
-        let still = self.windows_old_info().exists;
+        // Chỉ hỏi "còn không" — không đo lại cả cây thư mục (hàng chục GB) như `windows_old_info`.
+        let still = windows_old_exists();
         let report = SystemCleanReport {
             freed_bytes: system_free() as i64 - before as i64,
             exit_code: code,

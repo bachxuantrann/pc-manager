@@ -3,6 +3,24 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.1.3] - 2026-11-12
+
+### Sửa lỗi
+- **Dọn rác tự động không còn bị bỏ cả kỳ** khi tới hạn đúng lúc bạn đang tự quét/dọn ở trang Dọn rác:
+  trước đây phải chờ thêm 1/7/30 ngày, giờ PC Manager thử lại sau 30 phút.
+- Xoá Windows.old xong không còn đo lại cả cây thư mục (hàng chục GB) chỉ để kiểm tra đã xoá chưa —
+  kết quả hiện ngay.
+- Thông báo lỗi khi mở trình gỡ cài đặt gặp sự cố nói đúng thao tác ("mở trình gỡ cài đặt").
+
+### Thay đổi
+- Liệt kê tiến trình nhẹ hơn: không còn chép lại 0,5–1 MB dữ liệu mỗi lần làm mới (2 giây/lần ở trang
+  Tiến trình, 60 giây/lần khi chạy nền).
+- Quét rác nhanh hơn với các quy tắc "mọi file" (không tạo dữ liệu tạm cho từng file).
+- "Mở vị trí file" ở trang Tiến trình luôn mở đúng `explorer.exe` của Windows (đường dẫn tuyệt đối),
+  kể cả khi PC Manager chạy với quyền Administrator.
+- Dọn mã nội bộ theo bản rà soát toàn dự án 2026-11-11 (không đổi hành vi). Kế hoạch cải tiến tiếp
+  theo: `docs/PLAN.md`.
+
 ## [1.1.2] - 2026-11-11
 
 ### Sửa lỗi

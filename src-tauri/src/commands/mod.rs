@@ -91,18 +91,6 @@ pub async fn recent_actions(state: State<'_, AppState>, limit: u32) -> AppResult
     state.store.recent_actions(limit.clamp(1, 500))
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn page_ids() {
-        assert!(super::valid_page("cleaner"));
-        assert!(!super::valid_page("Cleaner"));
-        assert!(!super::valid_page("a b"));
-        assert!(!super::valid_page(""));
-        assert!(!super::valid_page("x\"; calc"));
-    }
-}
-
 /// Tác vụ dài đang chạy / đã xong mà giao diện chưa nhận (cửa sổ vừa mở lại dùng để nối lại).
 #[tauri::command]
 pub async fn jobs_snapshot(state: State<'_, AppState>) -> AppResult<Vec<crate::jobs::Job>> {
@@ -140,4 +128,16 @@ pub async fn diagnosis_run(
         crate::diagnosis::run(s, deep, &|p| report(p))
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn page_ids() {
+        assert!(super::valid_page("cleaner"));
+        assert!(!super::valid_page("Cleaner"));
+        assert!(!super::valid_page("a b"));
+        assert!(!super::valid_page(""));
+        assert!(!super::valid_page("x\"; calc"));
+    }
 }

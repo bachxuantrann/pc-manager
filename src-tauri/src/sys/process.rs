@@ -141,8 +141,12 @@ pub fn enumerate() -> windows::core::Result<Vec<RawProcess>> {
         status.ok()?;
         break;
     }
-    let bytes: Vec<u8> = buf.iter().flat_map(|w| w.to_ne_bytes()).collect();
-    Ok(parse(&bytes, buf.as_ptr() as usize))
+    // Xem buffer dưới dạng byte tại chỗ (không chép ~0.5–1 MB mỗi lần liệt kê).
+    // SAFETY: `buf` là Vec<u64> đã khởi tạo, chiếm đúng buf.len() * 8 byte liên tục; u8 không yêu
+    // cầu căn lề và mọi mẫu bit đều hợp lệ; slice chỉ sống trong hàm này và `buf` không bị sửa
+    // hay giải phóng trong lúc đó.
+    let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len() * 8) };
+    Ok(parse(bytes, buf.as_ptr() as usize))
 }
 
 /// Phân tích buffer. `base_addr` là địa chỉ gốc của buffer kernel đã ghi —
