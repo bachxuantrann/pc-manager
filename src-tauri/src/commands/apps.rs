@@ -6,15 +6,26 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::usage::leftovers::{LeftoverReport, LeftoverScan};
-use crate::usage::{self, installed, AppsOverview};
+use crate::sync::LockExt;
+use crate::usage::{self, installed, AppsOverview, AppsProgress};
+use tauri::ipc::Channel;
 
 /// Đọc registry + UserAssist + Prefetch và đo thư mục cài (có giới hạn thời gian)
 /// trên pool nền ưu tiên thấp.
 #[tauri::command]
-pub async fn apps_list(app: AppHandle) -> AppResult<AppsOverview> {
+pub async fn apps_list(app: AppHandle, on_progress: Channel<AppsProgress>) -> AppResult<AppsOverview> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        crate::bg::pool()?.install(|| usage::list(&state.store))
+        // Gửi tối đa ~10 lần/giây (và luôn gửi lần cuối) để không dồn sự kiện khi có hàng trăm app.
+        let last = std::sync::Mutex::new(std::time::Instant::now() - Duration::from_secs(1));
+        let report = |p: AppsProgress| {
+            let mut t = last.lock_recover();
+            if p.done == p.total || t.elapsed() >= Duration::from_millis(100) {
+                *t = std::time::Instant::now();
+                let _ = on_progress.send(p);
+            }
+        };
+        crate::bg::pool()?.install(|| usage::list(&state.store, &report))
     })
     .await
     .map_err(|e| crate::error::task_failed("đọc danh sách ứng dụng", e))?

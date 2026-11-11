@@ -130,23 +130,59 @@ pub fn parse_analysis(out: &str) -> WinSxsAnalysis {
     }
 }
 
+/// % ước lượng khi xoá `target` byte: dung lượng trống tăng thêm / `target`, trong khoảng 0–99
+/// (100% chỉ khi tác vụ thật sự xong).
+pub fn freed_percent(free_before: u64, free_now: u64, target: u64) -> f32 {
+    if target == 0 {
+        return 0.0;
+    }
+    let gained = free_now.saturating_sub(free_before) as f64;
+    ((gained / target as f64) * 100.0).clamp(0.0, 99.0) as f32
+}
+
+/// Chạy `Dism.exe args`, đọc output liên tục để báo % (thanh "[==== 42.5% ====]"), trả về
+/// (mã thoát, toàn bộ output).
+fn run_dism(args: &[&str], on_progress: &dyn Fn(f32)) -> AppResult<(i32, String)> {
+    let mut child = Command::new(system32().join("Dism.exe"))
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()?;
+    let mut text = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        let mut buf = [0u8; 512];
+        while let Ok(n) = out.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            let chunk = String::from_utf8_lossy(&buf[..n]);
+            // Ghép với đuôi đoạn trước: "42." | "5%" có thể bị cắt giữa hai lần đọc.
+            let tail_start = text.len().saturating_sub(8);
+            let tail = text.get(tail_start..).unwrap_or_default().to_owned();
+            if let Some(p) = last_percent(&format!("{tail}{chunk}")) {
+                on_progress(p);
+            }
+            text.push_str(&chunk);
+        }
+    }
+    let code = child.wait()?.code().unwrap_or(-1);
+    Ok((code, text))
+}
+
 impl SystemCleaner {
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, ()>> {
         self.running.try_lock_recover().ok_or_else(|| AppError::Busy("đang có một thao tác dọn hệ thống khác".into()))
     }
 
-    /// `DISM /AnalyzeComponentStore` — chỉ đọc, mất khoảng 1 phút.
-    pub fn analyze_winsxs(&self) -> AppResult<WinSxsAnalysis> {
+    /// `DISM /AnalyzeComponentStore` — chỉ đọc, mất khoảng 1 phút. Tiến độ (%) qua `on_progress`.
+    pub fn analyze_winsxs(&self, on_progress: &dyn Fn(f32)) -> AppResult<WinSxsAnalysis> {
         require_admin()?;
         let _g = self.lock()?;
         let started = Instant::now();
-        let out = Command::new(system32().join("Dism.exe"))
-            .args(["/Online", "/Cleanup-Image", "/AnalyzeComponentStore", "/English"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()?;
-        let text = String::from_utf8_lossy(&out.stdout).into_owned();
-        if !out.status.success() {
-            return Err(AppError::Other(format!("DISM lỗi (mã {}): {}", out.status.code().unwrap_or(-1), text.trim())));
+        let (code, text) = run_dism(&["/Online", "/Cleanup-Image", "/AnalyzeComponentStore", "/English"], on_progress)?;
+        if code != 0 {
+            return Err(AppError::Other(format!("DISM lỗi (mã {code}): {}", text.trim())));
         }
         let mut a = parse_analysis(&text);
         a.raw = text.lines().filter(|l| l.contains(" : ")).map(str::trim).collect::<Vec<_>>().join("\n");
@@ -161,24 +197,7 @@ impl SystemCleaner {
         let _g = self.lock()?;
         let started = Instant::now();
         let before = system_free();
-        let mut child = Command::new(system32().join("Dism.exe"))
-            .args(["/Online", "/Cleanup-Image", "/StartComponentCleanup", "/English"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()?;
-        if let Some(mut out) = child.stdout.take() {
-            let mut buf = [0u8; 512];
-            while let Ok(n) = out.read(&mut buf) {
-                if n == 0 {
-                    break;
-                }
-                if let Some(p) = last_percent(&String::from_utf8_lossy(&buf[..n])) {
-                    on_progress(p);
-                }
-            }
-        }
-        let code = child.wait()?.code().unwrap_or(-1);
+        let (code, _) = run_dism(&["/Online", "/Cleanup-Image", "/StartComponentCleanup", "/English"], on_progress)?;
         let report = SystemCleanReport {
             freed_bytes: system_free() as i64 - before as i64,
             exit_code: code,
@@ -205,12 +224,17 @@ impl SystemCleaner {
     }
 
     /// Xoá bản cài Windows trước bằng Disk Cleanup (chỉ bật mục "Previous Installations").
-    pub fn clean_windows_old(&self, store: &Store) -> AppResult<SystemCleanReport> {
+    ///
+    /// Disk Cleanup không báo tiến độ => ước lượng % từ dung lượng trống của ổ hệ thống tăng thêm
+    /// so với kích thước Windows.old đo trước khi xoá (tối đa 99% tới khi xong).
+    pub fn clean_windows_old(&self, store: &Store, on_progress: &dyn Fn(f32)) -> AppResult<SystemCleanReport> {
         require_admin()?;
         let _g = self.lock()?;
-        if !self.windows_old_info().exists {
+        let info = self.windows_old_info();
+        if !info.exists {
             return Err(AppError::NotFound("không có thư mục Windows.old".into()));
         }
+        let target = info.bytes.unwrap_or(0);
         let started = Instant::now();
         let before = system_free();
         let flag = format!("StateFlags{SAGE_SET:04}");
@@ -218,7 +242,16 @@ impl SystemCleaner {
             .create(format!(r"{VOLUME_CACHES}\{PREVIOUS_INSTALLATIONS}"))
             .map_err(|e| AppError::Other(format!("không mở được cấu hình Disk Cleanup: {e}")))?;
         key.set_u32(&flag, 2).map_err(|e| AppError::Other(format!("không đặt được cờ Disk Cleanup: {e}")))?;
-        let status = Command::new(system32().join("cleanmgr.exe")).arg(format!("/sagerun:{SAGE_SET}")).status();
+        let status = Command::new(system32().join("cleanmgr.exe")).arg(format!("/sagerun:{SAGE_SET}")).spawn().and_then(|mut child| {
+            on_progress(0.0);
+            loop {
+                if let Some(s) = child.try_wait()? {
+                    return Ok(s);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(700));
+                on_progress(freed_percent(before, system_free(), target));
+            }
+        });
         // Luôn gỡ cờ để lần chạy Disk Cleanup sau của người dùng không bị ảnh hưởng.
         let _ = key.remove_value(&flag);
         let code = status?.code().unwrap_or(-1);
@@ -245,6 +278,14 @@ impl SystemCleaner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn freed_percent_is_capped_below_100() {
+        assert_eq!(freed_percent(100, 100, 0), 0.0, "không biết kích thước => 0");
+        assert_eq!(freed_percent(100, 50, 1000), 0.0, "trống giảm (app khác ghi) => 0");
+        assert_eq!(freed_percent(0, 250, 1000), 25.0);
+        assert_eq!(freed_percent(0, 5000, 1000), 99.0, "chỉ 100% khi xong thật");
+    }
 
     #[test]
     fn percent_from_dism_progress() {
@@ -276,7 +317,7 @@ mod tests {
             let store = Store::in_memory().unwrap();
             let s = SystemCleaner::default();
             assert!(matches!(s.clean_winsxs(&store, &|_| {}), Err(AppError::Forbidden(_))));
-            assert!(matches!(s.clean_windows_old(&store), Err(AppError::Forbidden(_))));
+            assert!(matches!(s.clean_windows_old(&store, &|_| {}), Err(AppError::Forbidden(_))));
         }
     }
 
@@ -284,7 +325,7 @@ mod tests {
     #[test]
     #[ignore = "cần quyền Administrator (DISM)"]
     fn analyze_winsxs_real() {
-        let a = SystemCleaner::default().analyze_winsxs().unwrap();
+        let a = SystemCleaner::default().analyze_winsxs(&|_| {}).unwrap();
         println!("{a:#?}");
         assert!(a.actual_size.is_some() && a.shared_with_windows.is_some());
     }

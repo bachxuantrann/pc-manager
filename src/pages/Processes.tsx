@@ -348,7 +348,7 @@ export default function Processes() {
 
       {msg && (
         <div className="mt-2">
-          <Notice tone={msg.tone}>{msg.text}</Notice>
+          <Notice tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Notice>
         </div>
       )}
       <div className="mt-2 empty:hidden">

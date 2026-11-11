@@ -195,37 +195,32 @@ impl UsageIndex {
     }
 }
 
-pub fn list(store: &Store) -> AppResult<AppsOverview> {
+/// Tiến độ tải danh sách ứng dụng: số app đã xử lý (đo dung lượng) / tổng.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsProgress {
+    pub done: usize,
+    pub total: usize,
+}
+
+pub fn list(store: &Store, on_progress: &(dyn Fn(AppsProgress) + Sync)) -> AppResult<AppsOverview> {
     let apps = installed::list();
+    let total = apps.len();
+    on_progress(AppsProgress { done: 0, total });
     let ua = userassist::read();
     let prefetch = prefetch::read();
     let prefetch_entries = prefetch.as_ref().map(HashMap::len);
     let index = UsageIndex::build(store, &ua, prefetch);
     let deadline = Instant::now() + Duration::from_secs(8);
+    let done = std::sync::atomic::AtomicUsize::new(0);
 
     let out: Vec<AppInfo> = apps
         .par_iter()
         .map(|a| {
-            let exes = app_exes(a);
-            let used = index.last_used(a, &exes);
-            // Ưu tiên số registry; thiếu thì đo thư mục (có giới hạn thời gian).
-            let measured = match (a.estimated_bytes, &a.install_location) {
-                (None, Some(loc)) if usable_location(loc) => dir_size(loc, deadline),
-                _ => None,
-            };
-            AppInfo {
-                id: a.id.clone(),
-                name: a.name.clone(),
-                publisher: a.publisher.clone(),
-                version: a.version.clone(),
-                install_date_ms: a.install_date_ms,
-                size_bytes: a.estimated_bytes.or(measured),
-                size_measured: a.estimated_bytes.is_none() && measured.is_some(),
-                install_location: a.install_location.as_ref().map(|p| p.display().to_string()),
-                last_used_ms: used.map(|u| u.0),
-                last_used_source: used.map(|u| u.1),
-                can_uninstall: !a.no_remove && a.uninstall.is_some(),
-            }
+            let info = app_info(a, &index, deadline);
+            let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            on_progress(AppsProgress { done: n, total });
+            info
         })
         .collect();
 
@@ -235,6 +230,29 @@ pub fn list(store: &Store) -> AppResult<AppsOverview> {
         prefetch_entries,
         tracking_since_ms: store.usage_since().unwrap_or(None),
     })
+}
+
+fn app_info(a: &Installed, index: &UsageIndex, deadline: Instant) -> AppInfo {
+    let exes = app_exes(a);
+    let used = index.last_used(a, &exes);
+    // Ưu tiên số registry; thiếu thì đo thư mục (có giới hạn thời gian).
+    let measured = match (a.estimated_bytes, &a.install_location) {
+        (None, Some(loc)) if usable_location(loc) => dir_size(loc, deadline),
+        _ => None,
+    };
+    AppInfo {
+        id: a.id.clone(),
+        name: a.name.clone(),
+        publisher: a.publisher.clone(),
+        version: a.version.clone(),
+        install_date_ms: a.install_date_ms,
+        size_bytes: a.estimated_bytes.or(measured),
+        size_measured: a.estimated_bytes.is_none() && measured.is_some(),
+        install_location: a.install_location.as_ref().map(|p| p.display().to_string()),
+        last_used_ms: used.map(|u| u.0),
+        last_used_source: used.map(|u| u.1),
+        can_uninstall: !a.no_remove && a.uninstall.is_some(),
+    }
 }
 
 /// Lệnh gỡ cài đặt cần chạy: (chương trình, tham số thô).
@@ -278,6 +296,9 @@ pub struct Started {
     pub pid: u32,
 }
 
+/// Windows: chương trình yêu cầu quyền admin mà tiến trình gọi chưa có.
+const ERROR_ELEVATION_REQUIRED: i32 = 740;
+
 /// Mở trình gỡ cài đặt của app `id`. Lệnh luôn đọc lại từ registry, không nhận từ UI.
 pub fn uninstall(store: &Store, id: &str) -> AppResult<Started> {
     let app = installed::find(id).ok_or_else(|| AppError::NotFound("ứng dụng không còn trong danh sách".into()))?;
@@ -285,23 +306,47 @@ pub fn uninstall(store: &Store, id: &str) -> AppResult<Started> {
         if app.no_remove {
             return Err(AppError::Forbidden(format!("{} không cho phép gỡ cài đặt", app.name)));
         }
-        // App cài riêng cho user (HKCU): trình gỡ chạy dưới tài khoản admin sẽ tìm trong profile
-        // của admin và gỡ hỏng. Người dùng tự gỡ được mà không cần quyền admin.
-        if app.id.starts_with("HKCU\\") && crate::user::is_other_user() {
-            return Err(AppError::Forbidden(format!(
-                "{} được cài riêng cho tài khoản {} — hãy mở PC Manager ở chế độ thường (không nâng quyền) để gỡ",
-                app.name,
-                crate::user::other_account().unwrap_or("của bạn")
-            )));
-        }
         let raw = app.uninstall.as_deref().ok_or_else(|| AppError::NotFound("không có lệnh gỡ cài đặt".into()))?;
         let sys32 = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
         let cmd = parse_uninstall(raw, &sys32).ok_or_else(|| AppError::InvalidInput(format!("không hiểu lệnh gỡ: {raw}")))?;
         if !cmd.program.is_file() {
-            return Err(AppError::NotFound(format!("không tìm thấy {}", cmd.program.display())));
+            // Thường gặp sau khi đã gỡ: trình gỡ tự xoá mình nhưng để lại mục Uninstall trong registry.
+            return Err(AppError::Other(format!(
+                "trình gỡ không còn trên máy ({}) — app có thể đã được gỡ nhưng còn sót mục trong danh sách. \
+                 Bấm \"Dọn sót\" để xoá phần còn lại, kể cả mục này (registry được sao lưu .reg trước khi xoá).",
+                cmd.program.display()
+            )));
         }
-        let child = std::process::Command::new(&cmd.program).raw_arg(&cmd.args).spawn()?;
-        Ok((format!("{} {}", cmd.program.display(), cmd.args), child.id()))
+        let shown = format!("{} {}", cmd.program.display(), cmd.args);
+        // App cài riêng cho user (HKCU) khi app đang được nâng quyền bằng tài khoản admin khác:
+        // trình gỡ phải chạy dưới chính người dùng đang đăng nhập (chạy dưới admin nó sẽ tìm
+        // file/registry trong profile của admin và gỡ hỏng). App cài cho user không cần quyền admin để gỡ.
+        if app.id.starts_with("HKCU\\") && crate::user::is_other_user() {
+            let pid = crate::sys::launch::spawn_as_shell_user(&cmd.program, &cmd.args, &crate::user::environment(), 0)
+                .map_err(|e| AppError::Other(format!("không chạy được trình gỡ dưới tài khoản của bạn: {}", e.message())))?;
+            let who = crate::user::other_account().unwrap_or("người dùng đang đăng nhập");
+            return Ok((format!("{shown} (chạy dưới {who})"), pid));
+        }
+        match std::process::Command::new(&cmd.program).raw_arg(&cmd.args).spawn() {
+            Ok(child) => Ok((shown, child.id())),
+            // Trình gỡ yêu cầu quyền admin (app cài cho cả máy, PC Manager đang chạy quyền thường):
+            // mở lại qua UAC như khi gỡ trong Settings, thay vì báo lỗi 740 khó hiểu.
+            Err(e) if e.raw_os_error() == Some(ERROR_ELEVATION_REQUIRED) => {
+                match crate::sys::shell::run_elevated_pid(&cmd.program, &cmd.args) {
+                    Ok(Some(pid)) => Ok((format!("{shown} (qua UAC)"), pid)),
+                    Ok(None) => Err(AppError::Forbidden(format!(
+                        "{} được cài cho cả máy nên cần quyền Administrator để gỡ — bạn đã bấm No ở hộp UAC, chưa gỡ gì",
+                        app.name
+                    ))),
+                    Err(e) => Err(AppError::Other(format!(
+                        "{} được cài cho cả máy, cần quyền Administrator để gỡ — không mở được hộp UAC: {}",
+                        app.name,
+                        e.message()
+                    ))),
+                }
+            }
+            Err(e) => Err(e.into()),
+        }
     })();
     let detail = match &result {
         Ok((c, _)) => c.clone(),
@@ -390,6 +435,18 @@ mod tests {
 
     fn sys32() -> PathBuf {
         PathBuf::from(r"C:\Windows\System32")
+    }
+
+    #[test]
+    fn admin_only_program_reports_elevation_required() {
+        // Trình gỡ của app cài cho cả máy thường yêu cầu admin: chạy thẳng từ quyền thường phải ra
+        // mã 740 để `uninstall` chuyển sang mở qua UAC. msconfig.exe có manifest requireAdministrator.
+        if crate::sys::token::is_elevated().unwrap_or(false) {
+            return;
+        }
+        let exe = PathBuf::from(std::env::var("SystemRoot").unwrap()).join(r"System32\msconfig.exe");
+        let err = std::process::Command::new(exe).spawn().expect_err("không được chạy khi thiếu quyền admin");
+        assert_eq!(err.raw_os_error(), Some(ERROR_ELEVATION_REQUIRED));
     }
 
     #[test]
@@ -515,7 +572,7 @@ mod tests {
     #[ignore = "chỉ để xem dữ liệu thật"]
     fn print_apps() {
         let store = Store::in_memory().unwrap();
-        let o = list(&store).unwrap();
+        let o = list(&store, &|_| {}).unwrap();
         println!("UserAssist={} Prefetch={:?}", o.userassist_entries, o.prefetch_entries);
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
         for a in o.apps.iter().take(25) {
@@ -533,7 +590,7 @@ mod tests {
     #[test]
     fn real_list_runs() {
         let store = Store::in_memory().unwrap();
-        let o = list(&store).unwrap();
+        let o = list(&store, &|_| {}).unwrap();
         assert!(o.apps.iter().all(|a| !a.name.is_empty()));
     }
 }

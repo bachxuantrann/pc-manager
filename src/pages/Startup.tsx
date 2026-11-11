@@ -116,11 +116,18 @@ export default function Startup() {
     }
   };
 
-  const counts = useMemo(() => {
+  // Số trên mỗi tab = số dòng thật sự hiện ra (tính cả bộ lọc "Ẩn mục của Microsoft"),
+  // kèm số mục Microsoft đang bị ẩn để hiện cạnh ô đánh dấu.
+  const { counts, hiddenMs } = useMemo(() => {
     const c = { apps: 0, tasks: 0, services: 0 };
-    for (const e of entries ?? []) c[TAB_OF(e.source)]++;
-    return c;
-  }, [entries]);
+    const h = { apps: 0, tasks: 0, services: 0 };
+    for (const e of entries ?? []) {
+      const t = TAB_OF(e.source);
+      if (t !== "apps" && hideMs && isMicrosoft(e)) h[t]++;
+      else c[t]++;
+    }
+    return { counts: c, hiddenMs: h };
+  }, [entries, hideMs]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -151,13 +158,19 @@ export default function Startup() {
               : "Đang đọc registry, thư mục Startup và Task Scheduler…"}
           </p>
         </div>
-        <input
-          type="search"
-          placeholder="Tìm tên, lệnh, publisher…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-72 rounded-md border xl:w-96 border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
-        />
+        {/* "Tải lại" nằm cạnh ô tìm kiếm (không ở hàng tab): chữ "(đang ẩn N)" dài/ngắn không đẩy nó xuống dòng. */}
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            placeholder="Tìm tên, lệnh, publisher…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-72 rounded-md border xl:w-96 border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+          />
+          <Button variant="ghost" size="sm" className="shrink-0" loading={reloading} onClick={reload}>
+            {!reloading && "↻ "}Tải lại
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -173,21 +186,19 @@ export default function Startup() {
           </button>
         ))}
         {tab !== "apps" && (
-          <label className="ml-2 flex items-center gap-2 text-sm">
+          <label className="ml-2 flex items-center gap-2 whitespace-nowrap text-sm">
             <input type="checkbox" checked={hideMs} onChange={(e) => setHideMs(e.target.checked)} />
             Ẩn mục của Microsoft
+            {hideMs && hiddenMs[tab] > 0 && <span className="opacity-60">(đang ẩn {hiddenMs[tab]})</span>}
           </label>
         )}
-        <Button variant="ghost" size="sm" className="ml-auto" loading={reloading} onClick={reload}>
-          {!reloading && "↻ "}Tải lại
-        </Button>
       </div>
 
       <p className="mt-2 text-xs opacity-60">{TABS.find((t) => t.id === tab)?.hint}. Bật/tắt dùng cùng cơ chế với Task Manager, không xoá mục gốc.</p>
 
       {msg && (
         <div className="mt-2">
-          <Notice tone={msg.tone}>{msg.text}</Notice>
+          <Notice tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Notice>
         </div>
       )}
       <div className="mt-2 empty:hidden">

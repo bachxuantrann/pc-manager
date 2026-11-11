@@ -65,6 +65,41 @@ pub fn run_elevated(exe: &Path, args: &str) -> windows::core::Result<bool> {
     }
 }
 
+/// Như `run_elevated` nhưng trả về PID của tiến trình vừa chạy (để theo dõi tới khi xong).
+/// `Ok(None)` = người dùng bấm No ở UAC.
+pub fn run_elevated_pid(exe: &Path, args: &str) -> windows::core::Result<Option<u32>> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_CANCELLED;
+    use windows::Win32::System::Threading::GetProcessId;
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+
+    let verb = HSTRING::from("runas");
+    let file = HSTRING::from(exe.as_os_str());
+    let params = HSTRING::from(args);
+    let dir = exe.parent().map(|d| HSTRING::from(d.as_os_str()));
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        lpDirectory: dir.as_ref().map_or(PCWSTR::null(), |d| PCWSTR(d.as_ptr())),
+        nShow: 1, // SW_SHOWNORMAL
+        ..Default::default()
+    };
+    // SAFETY: `info` có cbSize đúng; các chuỗi HSTRING NUL-terminated sống tới hết lời gọi.
+    match unsafe { ShellExecuteExW(&mut info) } {
+        Ok(()) => {}
+        Err(e) if e.code() == ERROR_CANCELLED.to_hresult() => return Ok(None),
+        Err(e) => return Err(e),
+    }
+    // SAFETY: SEE_MASK_NOCLOSEPROCESS => hProcess (nếu có) thuộc về ta; bọc để tự đóng.
+    let process = unsafe { super::OwnedHandle::from_raw(info.hProcess) };
+    // Không có handle (vd. được giao cho tiến trình đang chạy sẵn) => không theo dõi được, coi như PID 0.
+    // SAFETY: handle hợp lệ, còn sống trong lời gọi.
+    Ok(Some(process.map_or(0, |h| unsafe { GetProcessId(h.raw()) })))
+}
+
 fn wide_to_string(buf: &[u16]) -> String {
     let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
     String::from_utf16_lossy(&buf[..end])

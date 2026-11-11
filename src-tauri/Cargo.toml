@@ -49,6 +49,7 @@ features = [
   "Win32_System_Variant",
   "Win32_System_TaskScheduler",
   "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
   "Win32_System_Registry",
   "Win32_Storage_FileSystem",
   "Win32_System_Services",

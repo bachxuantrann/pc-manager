@@ -1,7 +1,8 @@
 import { useReportBusy } from "../hooks/usePageActive";
 import { useJobResume } from "../hooks/useJobResume";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Button, { Spinner } from "../components/Button";
+import Button from "../components/Button";
+import ProgressBar from "../components/ProgressBar";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import PageShell from "../components/PageShell";
@@ -82,11 +83,25 @@ function DriveCard({ d, selected, onSelect }: { d: DriveInfo; selected: boolean;
 /** File nên tránh: dữ liệu ứng dụng / ổ đĩa ảo (cảnh báo) hoặc bị chặn. */
 const isRisky = (f: FileItem) => !!f.warning || !!f.blocked;
 
-function progressText(p: DiskProgress | null): string {
+function progressText(p: DiskProgress | null, dup: boolean): string {
   if (!p) return "Đang bắt đầu…";
-  if (p.phase === "walk") return `Đang duyệt: ${p.files.toLocaleString("vi-VN")} file · ${formatBytes(p.bytes)}`;
-  const what = p.phase === "head" ? "So 4KB đầu" : "Băm toàn bộ";
+  const step = (n: number) => (dup ? `Bước ${n}/3 — ` : "");
+  if (p.phase === "walk") return `${step(1)}Đang duyệt: ${p.files.toLocaleString("vi-VN")} file · ${formatBytes(p.bytes)}`;
+  const what = p.phase === "head" ? `${step(2)}So 4KB đầu` : `${step(3)}Băm toàn bộ`;
   return `${what}: ${p.done.toLocaleString("vi-VN")} / ${p.total.toLocaleString("vi-VN")} file nghi trùng`;
+}
+
+/**
+ * % của bước hiện tại. Bước duyệt không biết trước tổng: khi quét cả ổ thì ước lượng bằng dung
+ * lượng đã dùng của ổ (tối đa 99%); quét một thư mục thì không biết => null (thanh chạy qua lại).
+ */
+function progressPct(p: DiskProgress | null, root: string, drives: DriveInfo[]): number | null {
+  if (!p) return null;
+  if (p.phase !== "walk") return p.total > 0 ? (p.done / p.total) * 100 : null;
+  const norm = (s: string) => s.replace(/[\\/]+$/, "").toLowerCase();
+  const d = drives.find((x) => norm(x.root) === norm(root));
+  const used = d ? d.total - d.free : 0;
+  return used > 0 ? Math.min(99, (p.bytes / used) * 100) : null;
 }
 
 function FileRow({
@@ -344,9 +359,7 @@ export default function Disk() {
           )}
         </div>
         {scanning && (
-          <div className="mt-3 flex items-center gap-2 text-sm opacity-80">
-            <Spinner /> {progressText(progress)}
-          </div>
+          <ProgressBar className="mt-3" pct={progressPct(progress, root, drives)} label={progressText(progress, tab === "dup")} />
         )}
         {!scanning && current && (
           <div className="mt-3 text-sm opacity-70">
@@ -359,7 +372,7 @@ export default function Disk() {
 
       {error && (
         <div className="mt-3">
-          <Notice tone="error">{error}</Notice>
+          <Notice tone="error" onClose={() => setError(null)}>{error}</Notice>
         </div>
       )}
       {report && (

@@ -242,6 +242,12 @@ export interface InstalledApp {
   canUninstall: boolean;
 }
 
+/** Tiến độ tải danh sách ứng dụng: số app đã đo / tổng. */
+export interface AppsProgress {
+  done: number;
+  total: number;
+}
+
 export interface AppsOverview {
   apps: InstalledApp[];
   userassistEntries: number;
@@ -486,7 +492,8 @@ export const api = {
     tracked("cleaner.clean", () => invoke<CleanReport>("cleaner_clean", { scanId, ruleIds, dryRun, onProgress: channel(onProgress) })),
   cleanerCancel: () => invoke<void>("cleaner_cancel"),
 
-  appsList: () => invoke<AppsOverview>("apps_list"),
+  appsList: (onProgress?: (p: AppsProgress) => void) =>
+    invoke<AppsOverview>("apps_list", { onProgress: channel(onProgress ?? (() => {})) }),
   /** Mở trình gỡ cài đặt của app; trả về tên app. */
   appsUninstall: (id: string) => invoke<string>("apps_uninstall", { id }),
   /** Backend tự tìm phần còn sót và giữ kết quả. */
@@ -499,10 +506,13 @@ export const api = {
     listen<UninstallFinished>("apps://uninstall-finished", (e) => cb(e.payload)),
 
   systemWindowsOldInfo: () => invoke<WindowsOldInfo>("system_windows_old_info"),
-  systemAnalyzeWinsxs: () => tracked("winsxs.analyze", () => invoke<WinSxsAnalysis>("system_analyze_winsxs")),
+  systemAnalyzeWinsxs: (onProgress: (pct: number) => void) =>
+    tracked("winsxs.analyze", () => invoke<WinSxsAnalysis>("system_analyze_winsxs", { onProgress: channel(onProgress) })),
   systemCleanWinsxs: (onProgress: (pct: number) => void) =>
     tracked("winsxs.clean", () => invoke<SystemCleanReport>("system_clean_winsxs", { onProgress: channel(onProgress) })),
-  systemCleanWindowsOld: () => tracked("winold.clean", () => invoke<SystemCleanReport>("system_clean_windows_old")),
+  /** % là ước lượng (Disk Cleanup không báo tiến độ). */
+  systemCleanWindowsOld: (onProgress: (pct: number) => void) =>
+    tracked("winold.clean", () => invoke<SystemCleanReport>("system_clean_windows_old", { onProgress: channel(onProgress) })),
 
   diskDrives: () => invoke<DriveInfo[]>("disk_drives"),
   diskScanLarge: (root: string, minBytes: number, onProgress: (p: DiskProgress) => void) =>

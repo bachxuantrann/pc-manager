@@ -3,6 +3,41 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.0.4] - 2026-11-11
+
+### Mới
+- **Hiện % cho các tác vụ lâu** bằng một thanh tiến độ thống nhất:
+  - Phân tích WinSxS (trước chỉ có biểu tượng xoay).
+  - Xoá Windows.old — % ước lượng theo dung lượng đã lấy lại (Disk Cleanup không báo tiến độ).
+  - Quét file lớn / file trùng — khi quét cả ổ, % của bước duyệt ước lượng theo dung lượng đã dùng
+    của ổ; quét file trùng hiện rõ "Bước 1/3, 2/3, 3/3".
+  - Tải danh sách Ứng dụng: "x / y ứng dụng" kèm %.
+
+### Thay đổi
+- **Gỡ được app cài riêng cho người dùng khi đang nâng quyền bằng tài khoản admin khác** (trước đây
+  bị chặn). Trình gỡ được chạy dưới chính tài khoản đang đăng nhập Windows (như khi bạn tự gỡ trong
+  Settings), nên gỡ đúng profile của bạn; sau khi gỡ vẫn mở "Dọn phần còn sót" như bình thường.
+- **Gỡ app cài cho cả máy khi PC Manager đang chạy quyền thường:** trình gỡ cần quyền admin giờ được
+  mở qua hộp UAC (như khi gỡ trong Settings) thay vì báo lỗi "requires elevation" (mã 740). Bấm No ở
+  UAC thì báo rõ là chưa gỡ gì.
+- Dọn WinSxS xong chỉ báo kết quả và ẩn bảng phân tích cũ; bỏ nút "Phân tích lại" (bấm "Phân tích"
+  khi muốn xem).
+- Khi DISM báo thành công nhưng không lấy lại được gì, thông báo nói rõ là "không còn gì để dọn
+  thêm" thay vì "Xong sau 1 giây — không thấy dung lượng trống tăng thêm".
+
+### Sửa lỗi
+- Thông báo kết quả / lỗi của thao tác (Ứng dụng, Dọn rác, Dọn sâu hệ thống, Ổ đĩa, Tiến trình,
+  Khởi động) giờ có nút × để tắt, không còn đọng lại mãi.
+- Gỡ một app mà trình gỡ đã không còn trên máy (thường là app đã gỡ nhưng còn sót mục trong danh
+  sách): thay vì "Không tìm thấy: không tìm thấy …", thông báo giải thích và hướng dẫn bấm "Dọn sót"
+  để xoá phần còn lại.
+- Trang Khởi động: số trên tab "Tác vụ khi đăng nhập" / "Dịch vụ tự khởi động" đếm cả mục của
+  Microsoft đang bị ẩn nên không khớp danh sách. Giờ số trên tab = số dòng đang hiện, và ô "Ẩn mục
+  của Microsoft" ghi rõ đang ẩn bao nhiêu mục. Nút "Tải lại" chuyển lên cạnh ô tìm kiếm nên không
+  còn bị đẩy xuống dòng khi bật/tắt ô này.
+- Trang Ứng dụng: ô "Sắp xếp" chuyển lên cạnh nút "Tải lại", không còn bị đẩy xuống dòng khi chọn
+  bộ lọc "Không dùng > …" (lúc hiện thêm ô "Gồm cả app chưa rõ lần dùng").
+
 ## [1.0.3] - 2026-11-11
 
 ### Mới

@@ -7,12 +7,25 @@ import { api, errorMessage, type SystemCleanReport, type WinSxsAnalysis, type Wi
 import { formatBytes } from "../lib/format";
 import { useReportBusy } from "../hooks/usePageActive";
 import { useJobResume } from "../hooks/useJobResume";
+import ProgressBar from "./ProgressBar";
 
 type Busy = null | "analyze" | "winsxs" | "winold";
 
-function freedText(r: SystemCleanReport): string {
-  const freed = r.freedBytes > 0 ? `giải phóng khoảng ${formatBytes(r.freedBytes)}` : "không thấy dung lượng trống tăng thêm";
-  return `Xong sau ${Math.round(r.durationMs / 1000)} giây — ${freed}.${r.rebootRequired ? " Cần khởi động lại máy để hoàn tất." : ""}`;
+/** Dưới mức này coi như không lấy lại được gì (chương trình khác vẫn ghi/xoá file trong lúc dọn). */
+const NOTHING_FREED = 16 * 1024 * 1024;
+
+function freedText(r: SystemCleanReport, what: "winsxs" | "winold"): string {
+  const secs = Math.max(1, Math.round(r.durationMs / 1000));
+  const reboot = r.rebootRequired ? " Cần khởi động lại máy để hoàn tất." : "";
+  if (r.freedBytes >= NOTHING_FREED) return `Xong sau ${secs} giây — giải phóng khoảng ${formatBytes(r.freedBytes)}.${reboot}`;
+  if (what === "winsxs") {
+    // DISM trả "thành công" ngay cả khi không còn gì để dọn (vd. vừa dọn xong lần trước).
+    return (
+      `DISM báo thành công sau ${secs} giây nhưng không còn gì để dọn thêm — kho đã được dọn gần đây.${reboot} ` +
+      "Nếu bấm Phân tích vẫn thấy còn gói có thể thu hồi, thường phải khởi động lại máy rồi dọn lại."
+    );
+  }
+  return `Xong sau ${secs} giây — không thấy dung lượng trống tăng thêm.${reboot}`;
 }
 
 /** Kết quả DISM /AnalyzeComponentStore: tách phần không dọn được khỏi phần dọn được. */
@@ -61,8 +74,6 @@ export default function SystemDeepClean() {
   const [winOld, setWinOld] = useState<WindowsOldInfo | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
-  /** Vừa dọn WinSxS: bảng phân tích cũ đã bị ẩn, mời người dùng phân tích lại. */
-  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     api.systemWindowsOldInfo().then(setWinOld).catch(() => setWinOld(null));
@@ -72,15 +83,16 @@ export default function SystemDeepClean() {
 
   const analyze = async () => {
     setBusy("analyze");
-    setStale(false);
+    setProgress(0);
     // Giữ thông báo kết quả dọn (nếu có); chỉ xoá thông báo lỗi cũ.
     setMsg((m) => (m?.tone === "error" ? null : m));
     try {
-      setAnalysis(await api.systemAnalyzeWinsxs());
+      setAnalysis(await api.systemAnalyzeWinsxs(setProgress));
     } catch (e) {
       setMsg({ tone: "error", text: errorMessage(e) });
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   };
 
@@ -118,23 +130,25 @@ export default function SystemDeepClean() {
 
   /**
    * Dọn xong: báo kết quả, ẩn bảng phân tích cũ (đã sai sau khi dọn). Không tự phân tích lại
-   * (mất ~1 phút) — người dùng bấm "Phân tích lại" nếu muốn xem kho sau khi dọn.
+   * (mất ~1 phút) — người dùng tự bấm "Phân tích" khi muốn xem kho sau khi dọn.
    */
   const afterWinsxsClean = (r: SystemCleanReport) => {
-    setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
+    setMsg({ tone: "ok", text: `WinSxS: ${freedText(r, "winsxs")}` });
     setAnalysis(null);
     setProgress(null);
-    setStale(true);
   };
 
   // Cửa sổ bị đóng (xuống tray) lúc DISM / Disk Cleanup đang chạy rồi mở lại: hiện lại trạng thái.
-  useJobResume<null>("winsxs.analyze", {
-    onRunning: () => {
+  useJobResume<number>("winsxs.analyze", {
+    onRunning: (p) => {
       setMsg(null);
       setBusy("analyze");
+      setProgress(p ?? 0);
     },
+    onProgress: setProgress,
     onDone: (o) => {
       setBusy(null);
+      setProgress(null);
       if (o.ok) setAnalysis(o.value as WinSxsAnalysis);
       else setMsg({ tone: "error", text: `Phân tích WinSxS: ${errorMessage(o.value)}` });
     },
@@ -153,16 +167,19 @@ export default function SystemDeepClean() {
       else setMsg({ tone: "error", text: `WinSxS: ${errorMessage(o.value)}` });
     },
   });
-  useJobResume<null>("winold.clean", {
-    onRunning: () => {
+  useJobResume<number>("winold.clean", {
+    onRunning: (p) => {
       setMsg(null);
       setBusy("winold");
+      setProgress(p ?? 0);
     },
+    onProgress: setProgress,
     onDone: (o) => {
       setBusy(null);
+      setProgress(null);
       setMsg(
         o.ok
-          ? { tone: "ok", text: `Windows.old: ${freedText(o.value as SystemCleanReport)}` }
+          ? { tone: "ok", text: `Windows.old: ${freedText(o.value as SystemCleanReport, "winold")}` }
           : { tone: "error", text: `Windows.old: ${errorMessage(o.value)}` },
       );
       api.systemWindowsOldInfo().then(setWinOld).catch(() => {});
@@ -185,15 +202,17 @@ export default function SystemDeepClean() {
       danger: true,
       onConfirm: async () => {
         setBusy("winold");
+        setProgress(0);
         setMsg(null);
         try {
-          const r = await api.systemCleanWindowsOld();
-          setMsg({ tone: "ok", text: `Windows.old: ${freedText(r)}` });
+          const r = await api.systemCleanWindowsOld(setProgress);
+          setMsg({ tone: "ok", text: `Windows.old: ${freedText(r, "winold")}` });
           setWinOld(await api.systemWindowsOldInfo());
         } catch (e) {
           setMsg({ tone: "error", text: `Windows.old: ${errorMessage(e)}` });
         } finally {
           setBusy(null);
+          setProgress(null);
         }
       },
     });
@@ -210,22 +229,8 @@ export default function SystemDeepClean() {
               Dọn bằng DISM — cách duy nhất an toàn. Không bao giờ xoá trực tiếp file trong WinSxS.
             </div>
             {analysis && <AnalysisView a={analysis} />}
-            {stale && !analysis && busy === null && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="opacity-70">Kho vừa thay đổi nên số liệu phân tích cũ đã được ẩn.</span>
-                <Button variant="secondary" size="sm" disabled={locked} onClick={analyze} title="DISM /AnalyzeComponentStore — chỉ đọc, ~1 phút">
-                  Phân tích lại để xem kho sau khi dọn
-                </Button>
-              </div>
-            )}
-            {busy === "winsxs" && (
-              <div className="mt-2">
-                <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                  <div className="h-full bg-accent transition-all" style={{ width: `${progress ?? 0}%` }} />
-                </div>
-                <div className="mt-1 text-xs opacity-70">DISM đang chạy… {progress != null ? `${progress.toFixed(1)}%` : ""} — đừng tắt máy.</div>
-              </div>
-            )}
+            {busy === "winsxs" && <ProgressBar className="mt-2" pct={progress} label="Đang dọn bằng DISM — đừng tắt máy." />}
+            {busy === "analyze" && <ProgressBar className="mt-2" pct={progress} label="Đang phân tích kho WinSxS (chỉ đọc)…" />}
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" disabled={locked} loading={busy === "analyze"} onClick={analyze} title="DISM /AnalyzeComponentStore — chỉ đọc, ~1 phút">
@@ -253,13 +258,20 @@ export default function SystemDeepClean() {
                 "Không có — máy chưa nâng cấp Windows gần đây hoặc đã được dọn."
               )}
             </div>
+            {busy === "winold" && (
+              <ProgressBar className="mt-2" pct={progress} label="Disk Cleanup đang xoá Windows.old — % ước lượng theo dung lượng đã lấy lại." />
+            )}
           </div>
           <Button variant="danger" size="sm" disabled={locked || !winOld?.exists} loading={busy === "winold"} onClick={cleanWinOld}>
             Xoá Windows.old
           </Button>
         </div>
 
-        {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+        {msg && (
+          <Notice tone={msg.tone} onClose={() => setMsg(null)}>
+            {msg.text}
+          </Notice>
+        )}
       </div>
       <ConfirmDialog req={confirm} onClose={() => setConfirm(null)} />
     </Card>

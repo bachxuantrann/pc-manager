@@ -138,6 +138,28 @@ pub fn env(key: &str) -> Option<String> {
     }
 }
 
+/// Toàn bộ biến môi trường cho một tiến trình con chạy dưới user đang đăng nhập: biến của máy
+/// (lấy từ tiến trình) + biến của user đó; bỏ biến riêng của tài khoản admin.
+pub fn environment() -> Vec<(String, String)> {
+    let process: Vec<(String, String)> = std::env::vars().collect();
+    match other() {
+        Some(o) => merge_environment(o, process),
+        None => process,
+    }
+}
+
+fn merge_environment(o: &Other, process: Vec<(String, String)>) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = process
+        .into_iter()
+        .filter(|(k, _)| {
+            let up = k.to_ascii_uppercase();
+            !PER_USER_VARS.contains(&up.as_str()) && !o.admin_only.contains(&up) && !o.vars.contains_key(&up)
+        })
+        .collect();
+    out.extend(o.vars.iter().map(|(k, v)| (k.clone(), v.clone())));
+    out
+}
+
 /// Tiến trình đang chạy dưới tài khoản khác user đang đăng nhập.
 pub fn is_other_user() -> bool {
     other().is_some()
@@ -206,6 +228,35 @@ mod tests {
         assert_eq!(lookup_in(&o, "OneDrive", &machine), None, "biến theo user mà user không có => không mượn của admin");
         assert_eq!(lookup_in(&o, "AdminTool", &machine), None);
         assert_eq!(lookup_in(&o, "SystemRoot", &machine).as_deref(), Some("admin:SystemRoot"));
+    }
+
+    #[test]
+    fn child_environment_drops_admin_values() {
+        let o = Other {
+            sid: "S-1-5-21-1".into(),
+            account: r"DC\thuong".into(),
+            vars: HashMap::from([
+                ("USERPROFILE".to_owned(), r"C:\Users\thuong".to_owned()),
+                ("TEMP".to_owned(), r"C:\Users\thuong\AppData\Local\Temp".to_owned()),
+            ]),
+            admin_only: HashSet::from(["ADMINTOOL".to_owned()]),
+        };
+        let process = vec![
+            ("UserProfile".to_owned(), r"C:\Users\admin".to_owned()),
+            ("OneDrive".to_owned(), r"C:\Users\admin\OneDrive".to_owned()),
+            ("AdminTool".to_owned(), "x".to_owned()),
+            ("SystemRoot".to_owned(), r"C:\Windows".to_owned()),
+        ];
+        let mut env = merge_environment(&o, process);
+        env.sort();
+        assert_eq!(
+            env,
+            vec![
+                ("SystemRoot".to_owned(), r"C:\Windows".to_owned()),
+                ("TEMP".to_owned(), r"C:\Users\thuong\AppData\Local\Temp".to_owned()),
+                ("USERPROFILE".to_owned(), r"C:\Users\thuong".to_owned()),
+            ]
+        );
     }
 
     #[test]

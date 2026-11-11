@@ -24,3 +24,22 @@ body {
     color: #e5e7eb;
   }
 }
+
+/* Thanh tiến độ khi chưa biết tổng (ProgressBar với pct = null). */
+@keyframes progress-indeterminate {
+  0% {
+    left: -33%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+.progress-indeterminate {
+  animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-indeterminate {
+    animation: none;
+    left: 33%;
+  }
+}

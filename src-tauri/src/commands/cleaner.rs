@@ -53,10 +53,10 @@ pub async fn system_windows_old_info(app: AppHandle) -> AppResult<WindowsOldInfo
     blocking(app, |s| Ok(s.system.windows_old_info())).await
 }
 
-/// `DISM /AnalyzeComponentStore` — chỉ đọc, ~1 phút, cần quyền admin.
+/// `DISM /AnalyzeComponentStore` — chỉ đọc, ~1 phút, cần quyền admin. Tiến độ % qua `on_progress`.
 #[tauri::command]
-pub async fn system_analyze_winsxs(app: AppHandle) -> AppResult<WinSxsAnalysis> {
-    jobs::run(app, "winsxs.analyze", "dọn rác", None::<Channel<()>>, |s, _| s.system.analyze_winsxs()).await
+pub async fn system_analyze_winsxs(app: AppHandle, on_progress: Channel<f32>) -> AppResult<WinSxsAnalysis> {
+    jobs::run(app, "winsxs.analyze", "dọn rác", Some(on_progress), |s, report| s.system.analyze_winsxs(&|p| report(p))).await
 }
 
 /// Dọn WinSxS bằng DISM /StartComponentCleanup. Tiến độ % qua `on_progress`.
@@ -65,8 +65,8 @@ pub async fn system_clean_winsxs(app: AppHandle, on_progress: Channel<f32>) -> A
     jobs::run(app, "winsxs.clean", "dọn rác", Some(on_progress), |s, report| s.system.clean_winsxs(&s.store, &|p| report(p))).await
 }
 
-/// Xoá Windows.old bằng Disk Cleanup (mục "Previous Installations").
+/// Xoá Windows.old bằng Disk Cleanup (mục "Previous Installations"). Tiến độ % (ước lượng) qua `on_progress`.
 #[tauri::command]
-pub async fn system_clean_windows_old(app: AppHandle) -> AppResult<SystemCleanReport> {
-    jobs::run(app, "winold.clean", "dọn rác", None::<Channel<()>>, |s, _| s.system.clean_windows_old(&s.store)).await
+pub async fn system_clean_windows_old(app: AppHandle, on_progress: Channel<f32>) -> AppResult<SystemCleanReport> {
+    jobs::run(app, "winold.clean", "dọn rác", Some(on_progress), |s, report| s.system.clean_windows_old(&s.store, &|p| report(p))).await
 }

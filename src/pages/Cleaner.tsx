@@ -313,7 +313,7 @@ export default function Cleaner() {
     >
       {error && (
         <div className="mb-4">
-          <Notice tone="error">{error}</Notice>
+          <Notice tone="error" onClose={() => setError(null)}>{error}</Notice>
         </div>
       )}
       <div className="mb-4 empty:hidden">

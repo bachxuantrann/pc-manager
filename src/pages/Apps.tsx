@@ -1,12 +1,13 @@
 import { useReportBusy } from "../hooks/usePageActive";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Button, { Spinner } from "../components/Button";
+import Button from "../components/Button";
+import ProgressBar from "../components/ProgressBar";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import LeftoverDialog, { type LeftoverTarget } from "../components/LeftoverDialog";
 import { AdminNotice } from "../components/Elevation";
 import PageShell from "../components/PageShell";
-import { api, errorMessage, type AppsOverview, type InstalledApp, type UsageSource } from "../lib/api";
+import { api, errorMessage, type AppsOverview, type AppsProgress, type InstalledApp, type UsageSource } from "../lib/api";
 import { daysAgo, formatBytes, formatDate, relativeDays } from "../lib/format";
 
 type SortKey = "size" | "name" | "lastUsed" | "installed";
@@ -58,10 +59,12 @@ export default function Apps() {
   /** App đang chạy trình gỡ — chờ backend báo xong. */
   const [uninstalling, setUninstalling] = useState<Set<string>>(new Set());
 
+  const [loadProgress, setLoadProgress] = useState<AppsProgress | null>(null);
   const load = useCallback(() => {
     setLoading(true);
+    setLoadProgress(null);
     api
-      .appsList()
+      .appsList(setLoadProgress)
       .then((d) => {
         setData(d);
         setError(null);
@@ -168,9 +171,23 @@ export default function Apps() {
             onChange={(e) => setQuery(e.target.value)}
             className="w-64 rounded-md border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent xl:w-80 dark:border-white/10 dark:bg-white/5"
           />
-          <Button variant="ghost" size="sm" loading={loading} onClick={load}>
+          <Button variant="ghost" size="sm" className="shrink-0" loading={loading} onClick={load}>
             {!loading && "↻ "}Tải lại
           </Button>
+          {/* Ở hàng trên cùng (không ở hàng bộ lọc): ô "Gồm cả app chưa rõ lần dùng" hiện/ẩn không đẩy nó xuống dòng. */}
+          <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm">
+            Sắp xếp
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="h-8 cursor-pointer rounded-md border border-black/10 bg-white px-2 text-sm dark:border-white/10 dark:bg-[#1a1d23]"
+            >
+              <option value="size">Dung lượng</option>
+              <option value="lastUsed">Lâu chưa dùng nhất</option>
+              <option value="installed">Cài lâu nhất</option>
+              <option value="name">Tên</option>
+            </select>
+          </label>
         </div>
       }
     >
@@ -188,24 +205,11 @@ export default function Apps() {
           </button>
         ))}
         {unusedDays > 0 && (
-          <label className="ml-1 flex cursor-pointer items-center gap-2 text-sm" title="App không nguồn nào ghi nhận lần chạy và đã cài lâu hơn số ngày đã chọn">
+          <label className="ml-1 flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm" title="App không nguồn nào ghi nhận lần chạy và đã cài lâu hơn số ngày đã chọn">
             <input type="checkbox" checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.target.checked)} className="accent-[var(--color-accent)]" />
             Gồm cả app chưa rõ lần dùng
           </label>
         )}
-        <label className="ml-auto flex items-center gap-2 text-sm">
-          Sắp xếp
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="h-8 cursor-pointer rounded-md border border-black/10 bg-white px-2 text-sm dark:border-white/10 dark:bg-[#1a1d23]"
-          >
-            <option value="size">Dung lượng</option>
-            <option value="lastUsed">Lâu chưa dùng nhất</option>
-            <option value="installed">Cài lâu nhất</option>
-            <option value="name">Tên</option>
-          </select>
-        </label>
       </div>
 
       {data && (
@@ -223,13 +227,29 @@ export default function Apps() {
 
       {(msg || error) && (
         <div className="mt-3">
-          <Notice tone={msg?.tone ?? "error"}>{msg?.text ?? error}</Notice>
+          <Notice
+            tone={msg?.tone ?? "error"}
+            onClose={() => {
+              setMsg(null);
+              setError(null);
+            }}
+          >
+            {msg?.text ?? error}
+          </Notice>
         </div>
       )}
 
       {loading && !data ? (
-        <Card className="mt-3 flex items-center justify-center gap-3 py-12 text-sm opacity-70">
-          <Spinner /> Đang đọc danh sách ứng dụng và đo dung lượng…
+        <Card className="mt-3 py-10">
+          <ProgressBar
+            className="mx-auto max-w-md"
+            pct={loadProgress && loadProgress.total > 0 ? (loadProgress.done / loadProgress.total) * 100 : null}
+            label={
+              loadProgress && loadProgress.total > 0
+                ? `Đang đọc ứng dụng và đo dung lượng: ${loadProgress.done} / ${loadProgress.total}`
+                : "Đang đọc danh sách ứng dụng…"
+            }
+          />
         </Card>
       ) : (
         <>
