@@ -1,3 +1,4 @@
+import { DIALOG } from "./ui";
 import { useEffect, type ReactNode } from "react";
 import Button from "./Button";
 import { usePageActive } from "../hooks/usePageActive";
@@ -27,7 +28,7 @@ export default function ConfirmDialog({ req, onClose }: { req: ConfirmRequest | 
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-[#1c1f26]"
+        className={`w-full max-w-md p-5 ${DIALOG}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-semibold">{req.title}</h2>

@@ -1,3 +1,4 @@
+import { INPUT, SURFACE, THEAD } from "../components/ui";
 import { useCallback, useMemo, useState } from "react";
 import { AdminNotice } from "../components/Elevation";
 import Button from "../components/Button";
@@ -256,13 +257,13 @@ export default function Processes() {
             placeholder="Tìm tên, PID, đường dẫn, publisher…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-72 rounded-md border xl:w-96 border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+            className={`w-72 xl:w-96 ${INPUT}`}
           />
         </div>
       </div>
 
       {/* Thanh thao tác cho dòng đang chọn */}
-      <div className="mt-4 flex min-h-11 flex-wrap items-center gap-1 rounded-lg bg-white px-3 py-1.5 shadow-sm dark:bg-white/5">
+      <div className={`mt-4 flex min-h-11 flex-wrap items-center gap-1 px-3 py-1.5 ${SURFACE}`}>
         {p && (
           <>
             <span className="mr-2 max-w-56 truncate text-sm font-medium" title={p.path ?? undefined}>
@@ -360,9 +361,9 @@ export default function Processes() {
         </div>
       )}
 
-      <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg bg-white shadow-sm dark:bg-white/5">
+      <div className={`mt-3 min-h-0 flex-1 overflow-auto ${SURFACE}`}>
         <table className="w-full table-fixed text-sm">
-          <thead className="sticky top-0 z-10 bg-white text-xs dark:bg-[#1a1d23]">
+          <thead className={THEAD}>
             <tr>
               {COLUMNS.map((c) => (
                 <th

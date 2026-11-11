@@ -109,6 +109,8 @@ Máy công ty: user thường (vd `DC1\bachtx`) nâng quyền bằng tài khoả
 ## Giao diện (theme)
 - Tối mặc định, đổi ở Cài đặt → Giao diện (Tối/Sáng/Theo Windows; lưu `localStorage` `pcm.theme`, `src/lib/theme.ts`). Biến thể `dark:` của Tailwind do `data-theme` trên `<html>` điều khiển (không theo Windows), thanh tiêu đề đổi theo qua `plugin:window|set_theme`.
 - WebView chạy `--disable-gpu` (tiết kiệm RAM) => mọi hiệu ứng do CPU vẽ: **không** dùng `backdrop-blur`, glow/animation lặp, ảnh nền lớn; chỉ gradient tĩnh và SVG. Biểu tượng tự vẽ trong `components/Icons.tsx` (không thêm thư viện icon). Không import cả module `@tauri-apps/api/window` chỉ để gọi một lệnh (nặng ~18 KB) — gọi `invoke` thẳng.
+- Class dùng chung ở `src/components/ui.ts` (`SURFACE` bảng/khung, `THEAD` tiêu đề bảng dính, `INPUT`, `SELECT`, `PANEL`, `DIALOG`, `pill()` nút lọc) — trang mới dùng các class này, không tự viết màu/bo góc riêng.
+- Sửa giao diện xong phải chạy `scripts/layout-check.js` (hướng dẫn trong file) ở 860x560 (nhỏ nhất), 1100x720, 1366x768, 1920x1080, cả hai theme: `issues` phải rỗng; rồi chụp ảnh xem bằng mắt.
 - Giữ React (đã đo: toàn bộ JS heap ~2.3 MB so với WebView2 ~132 MB riêng — bỏ React lợi ~1 MB, không đáng viết lại).
 - Thanh công cụ (tìm kiếm, Tải lại, Sắp xếp) đặt ở `PageShell actions`, không đặt cuối hàng bộ lọc (hàng bộ lọc đổi độ dài sẽ đẩy chúng xuống dòng). Lưới card 2 cột: ghép card cao gần nhau cùng hàng, card nhiều nội dung `xl:col-span-2`.
 

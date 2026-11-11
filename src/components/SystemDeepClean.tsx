@@ -1,3 +1,4 @@
+import { PANEL } from "./ui";
 import { useEffect, useState } from "react";
 import Button, { Spinner } from "./Button";
 import { Card, Notice } from "./Card";
@@ -222,7 +223,7 @@ export default function SystemDeepClean() {
       <div className="grid gap-3">
         <AdminNotice>Dọn sâu hệ thống cần quyền Administrator.</AdminNotice>
 
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-black/5 p-3 dark:border-white/10">
+        <div className={`flex flex-wrap items-start justify-between gap-3 p-3 ${PANEL}`}>
           <div className="min-w-0 flex-1 text-sm">
             <div className="font-medium">Kho thành phần Windows (WinSxS)</div>
             <div className="text-xs opacity-70">
@@ -242,7 +243,7 @@ export default function SystemDeepClean() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-black/5 p-3 dark:border-white/10">
+        <div className={`flex flex-wrap items-start justify-between gap-3 p-3 ${PANEL}`}>
           <div className="min-w-0 flex-1 text-sm">
             <div className="font-medium">Bản cài Windows trước (Windows.old)</div>
             <div className="text-xs opacity-70">

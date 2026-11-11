@@ -3,6 +3,16 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.1.1] - 2026-11-11
+
+### Thay đổi
+- **Mọi trang đồng bộ giao diện mới**: Bộ nhớ, Dọn rác, Tiến trình, Khởi động, Ứng dụng, Ổ đĩa, Cài
+  đặt cùng kiểu với Tổng quan / Cấu hình máy / Chẩn đoán — bảng bo góc viền mảnh, tiêu đề bảng dính
+  nền đặc khi cuộn, ô tìm kiếm và ô chọn cùng một kiểu, nút lọc dạng viên, hộp thoại xác nhận nền và
+  viền mới. Thanh tiến độ của Dọn rác dùng chung kiểu với các trang khác.
+- Đã kiểm tra bố cục tự động ở 4 kích thước cửa sổ (từ nhỏ nhất 860×560 tới 1920×1080) × mọi trang ×
+  cả theme tối và sáng: không cuộn ngang, không tràn, không nút nào đè lên nhau hay bị cắt chữ.
+
 ## [1.1.0] - 2026-11-11
 
 ### Mới

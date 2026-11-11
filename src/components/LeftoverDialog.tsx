@@ -1,3 +1,4 @@
+import { DIALOG, PANEL } from "./ui";
 import { useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "./Button";
 import { Notice } from "./Card";
@@ -101,7 +102,7 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
       <div
         role="dialog"
         aria-modal="true"
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg bg-white p-5 shadow-xl dark:bg-[#1c1f26]"
+        className={`flex max-h-[85vh] w-full max-w-3xl flex-col p-5 ${DIALOG}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-semibold">Dọn phần còn sót — {app.name}</h2>
@@ -147,7 +148,7 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
           </div>
         )}
 
-        <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-black/5 dark:border-white/10">
+        <div className={`mt-3 min-h-0 flex-1 overflow-auto ${PANEL}`}>
           {phase === "scan" ? (
             <div className="flex items-center justify-center gap-3 py-12 text-sm opacity-70">
               <Spinner /> Đang tìm thư mục, shortcut và registry còn sót…

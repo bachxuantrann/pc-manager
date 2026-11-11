@@ -1,3 +1,4 @@
+import { INPUT, SELECT, SURFACE, THEAD, pill } from "../components/ui";
 import { useReportBusy } from "../hooks/usePageActive";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Button from "../components/Button";
@@ -169,7 +170,7 @@ export default function Apps() {
             placeholder="Tìm tên, nhà phát hành…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-64 rounded-md border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent xl:w-80 dark:border-white/10 dark:bg-white/5"
+            className={`w-64 xl:w-80 ${INPUT}`}
           />
           <Button variant="ghost" size="sm" className="shrink-0" loading={loading} onClick={load}>
             {!loading && "↻ "}Tải lại
@@ -180,7 +181,7 @@ export default function Apps() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className="h-8 cursor-pointer rounded-md border border-black/10 bg-white px-2 text-sm dark:border-white/10 dark:bg-[#1a1d23]"
+              className={SELECT}
             >
               <option value="size">Dung lượng</option>
               <option value="lastUsed">Lâu chưa dùng nhất</option>
@@ -197,9 +198,7 @@ export default function Apps() {
             key={f.days}
             type="button"
             onClick={() => setUnusedDays(f.days)}
-            className={`rounded-full px-3 py-1 text-sm transition ${
-              unusedDays === f.days ? "bg-accent text-white" : "bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"
-            }`}
+            className={pill(unusedDays === f.days)}
           >
             {f.label}
           </button>
@@ -257,9 +256,9 @@ export default function Apps() {
             {rows.length} ứng dụng · tổng {formatBytes(totalSize)}
             {unusedDays > 0 && rows.length > 0 && " có thể gỡ để lấy lại dung lượng"}
           </div>
-          <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-lg bg-white shadow-sm dark:bg-white/5">
+          <div className={`mt-2 min-h-0 flex-1 overflow-auto ${SURFACE}`}>
             <table className="w-full table-fixed text-sm">
-              <thead className="sticky top-0 z-10 bg-white text-left text-xs dark:bg-[#1a1d23]">
+              <thead className={`text-left ${THEAD}`}>
                 <tr>
                   <th className="px-4 py-2 font-medium opacity-70">Ứng dụng</th>
                   <th className="w-28 px-3 py-2 text-right font-medium opacity-70">Dung lượng</th>

@@ -1,3 +1,4 @@
+import { INPUT, SURFACE, THEAD, pill } from "../components/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminNotice } from "../components/Elevation";
 import Button from "../components/Button";
@@ -165,7 +166,7 @@ export default function Startup() {
             placeholder="Tìm tên, lệnh, publisher…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-72 rounded-md border xl:w-96 border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+            className={`w-72 xl:w-96 ${INPUT}`}
           />
           <Button variant="ghost" size="sm" className="shrink-0" loading={reloading} onClick={reload}>
             {!reloading && "↻ "}Tải lại
@@ -180,7 +181,7 @@ export default function Startup() {
             type="button"
             title={t.hint}
             onClick={() => setTab(t.id)}
-            className={`rounded-full px-3 py-1 text-sm ${tab === t.id ? "bg-accent text-white" : "bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"}`}
+            className={pill(tab === t.id)}
           >
             {t.label} <span className="opacity-70">({counts[t.id]})</span>
           </button>
@@ -210,9 +211,9 @@ export default function Startup() {
         </div>
       )}
 
-      <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg bg-white shadow-sm dark:bg-white/5">
+      <div className={`mt-3 min-h-0 flex-1 overflow-auto ${SURFACE}`}>
         <table className="w-full table-fixed text-sm">
-          <thead className="sticky top-0 z-10 bg-white text-xs dark:bg-[#1a1d23]">
+          <thead className={THEAD}>
             <tr className="text-left">
               <th className="px-3 py-2 font-medium opacity-70">Tên</th>
               <th className="w-56 px-3 py-2 font-medium opacity-70">Publisher</th>

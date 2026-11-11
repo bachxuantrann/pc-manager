@@ -5,6 +5,7 @@ import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import PageShell from "../components/PageShell";
+import ProgressBar from "../components/ProgressBar";
 import SystemDeepClean from "../components/SystemDeepClean";
 import { AdminNotice } from "../components/Elevation";
 import { api, errorMessage, type CleanerProgress, type CleanReport, type Risk, type RuleScan, type ScanResult } from "../lib/api";
@@ -51,12 +52,7 @@ function ProgressView({ p, onCancel, cancelling }: { p: CleanerProgress | null; 
           {cancelling ? "Đang huỷ…" : "Huỷ"}
         </Button>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-        <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="text-sm tabular-nums opacity-70">
-        {p ? `${p.files.toLocaleString("vi-VN")} file · ${formatBytes(p.bytes)}` : "…"}
-      </div>
+      <ProgressBar pct={pct} label={p ? `${p.files.toLocaleString("vi-VN")} file · ${formatBytes(p.bytes)}` : "Chuẩn bị…"} />
     </Card>
   );
 }

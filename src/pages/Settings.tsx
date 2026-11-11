@@ -1,3 +1,4 @@
+import { INPUT, PANEL, SELECT } from "../components/ui";
 import { useCallback, useEffect, useState } from "react";
 import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
@@ -56,7 +57,7 @@ function AutoCleanSettings({ s, onChange }: { s: GeneralSettings; onChange: (s: 
         <select
           value={a.intervalDays}
           onChange={(e) => save(a.enabled, Number(e.target.value), a.ruleIds)}
-          className="h-8 cursor-pointer rounded-md border border-black/10 bg-white px-2 text-sm dark:border-white/10 dark:bg-[#1a1d23]"
+          className={SELECT}
         >
           {INTERVALS.map((i) => (
             <option key={i.v} value={i.v}>
@@ -122,7 +123,7 @@ function WhitelistSettings({ s, onChange }: { s: GeneralSettings; onChange: (s: 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="vd D:\Projects hoặc C:\Users\…\AppData\Local\MyApp"
-          className="h-8 flex-1 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+          className={`flex-1 ${INPUT}`}
         />
         <Button size="sm" type="submit" disabled={!input.trim()}>
           Thêm
@@ -131,7 +132,7 @@ function WhitelistSettings({ s, onChange }: { s: GeneralSettings; onChange: (s: 
       {s.whitelist.length === 0 ? (
         <div className="text-xs opacity-50">Chưa có thư mục nào.</div>
       ) : (
-        <ul className="divide-y divide-black/5 rounded-md border border-black/5 dark:divide-white/5 dark:border-white/10">
+        <ul className={`divide-y divide-black/5 dark:divide-white/5 ${PANEL}`}>
           {s.whitelist.map((p) => (
             <li key={p} className="flex items-center gap-2 px-3 py-1.5">
               <span className="flex-1 truncate font-mono text-xs" title={p}>
@@ -202,7 +203,7 @@ function ActivityLog() {
           ↻ Tải lại
         </Button>
       </div>
-      <div className="max-h-80 overflow-auto rounded-md border border-black/5 dark:border-white/10">
+      <div className={`max-h-80 overflow-auto ${PANEL}`}>
         <table className="w-full table-fixed text-xs">
           <tbody>
             {(items ?? []).map((a, i) => (

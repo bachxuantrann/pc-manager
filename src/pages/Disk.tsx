@@ -1,3 +1,4 @@
+import { INPUT, SELECT, SURFACE, THEAD } from "../components/ui";
 import { useReportBusy } from "../hooks/usePageActive";
 import { useJobResume } from "../hooks/useJobResume";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -333,14 +334,14 @@ export default function Disk() {
             onChange={(e) => setRoot(e.target.value)}
             disabled={scanning}
             placeholder="Thư mục cần quét, vd C:\Users\…"
-            className="h-8 min-w-48 flex-1 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+            className={`min-w-48 flex-1 ${INPUT}`}
             title="Chọn ổ ở trên hoặc nhập thư mục"
           />
           <select
             value={tab === "large" ? largeMin : dupMin}
             disabled={scanning}
             onChange={(e) => (tab === "large" ? setLargeMin : setDupMin)(Number(e.target.value))}
-            className="h-8 cursor-pointer rounded-md border border-black/10 bg-white px-2 text-sm dark:border-white/10 dark:bg-[#1a1d23]"
+            className={SELECT}
           >
             {(tab === "large" ? LARGE_MIN : DUP_MIN).map((o) => (
               <option key={o.v} value={o.v}>
@@ -433,9 +434,9 @@ export default function Disk() {
               <Notice tone="warn">{groupsAllSelected} nhóm đang chọn hết mọi bản — hãy để lại ít nhất 1 bản mỗi nhóm.</Notice>
             </div>
           )}
-          <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-lg bg-white shadow-sm dark:bg-white/5">
+          <div className={`mt-2 min-h-0 flex-1 overflow-auto ${SURFACE}`}>
             <table className="w-full table-fixed text-sm">
-              <thead className="sticky top-0 z-10 bg-white text-left text-xs dark:bg-[#1a1d23]">
+              <thead className={`text-left ${THEAD}`}>
                 <tr>
                   <th className="w-10" />
                   <th className="px-2 py-2 font-medium opacity-70">File</th>
