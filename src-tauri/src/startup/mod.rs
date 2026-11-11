@@ -171,6 +171,36 @@ pub fn list(publishers: &PublisherCache) -> AppResult<Vec<StartupEntry>> {
     Ok(out)
 }
 
+/// Số app đang bật khởi động cùng Windows (tab "Ứng dụng": Run/Run32 HKCU+HKLM + thư mục Startup).
+/// Bản nhẹ cho Smart Diagnosis: chỉ đọc registry/thư mục, KHÔNG giải shortcut và KHÔNG kiểm tra chữ ký.
+pub fn enabled_app_count() -> usize {
+    let mut n = 0;
+    for s in [Source::RunUser, Source::RunUser32, Source::RunMachine, Source::RunMachine32] {
+        let Some((hive, run, Some(approved))) = reg_source(s) else { continue };
+        let Ok(root) = hive.key() else { continue };
+        let Ok(key) = root.open(run) else { continue };
+        let Ok(values) = key.values() else { continue };
+        let states = read_approved(&root, Some(&format!(r"{APPROVED_BASE}\{approved}")));
+        n += values
+            .filter(|(name, _)| !name.is_empty())
+            .filter(|(name, _)| approved::parse(states.get(&name.to_lowercase()).map(Vec::as_slice)).enabled)
+            .count();
+    }
+    for s in [Source::StartupFolderUser, Source::StartupFolderCommon] {
+        let Some((dir, hive)) = folder_source(s) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let states = hive.key().map(|root| read_approved(&root, Some(&format!(r"{APPROVED_BASE}\StartupFolder")))).unwrap_or_default();
+        n += rd
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.eq_ignore_ascii_case("desktop.ini"))
+            .filter(|name| approved::parse(states.get(&name.to_lowercase()).map(Vec::as_slice)).enabled)
+            .count();
+    }
+    n
+}
+
 fn read_approved(root: &Key, path: Option<&str>) -> HashMap<String, Vec<u8>> {
     let Some(key) = path.and_then(|p| root.open(p).ok()) else { return HashMap::new() };
     let Ok(values) = key.values() else { return HashMap::new() };

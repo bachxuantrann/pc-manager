@@ -92,3 +92,10 @@ export const IconMonitor = (p: { className?: string }) => (
     <path d="M8 20h8M12 16v4" />
   </Icon>
 );
+
+export const IconPulse = (p: { className?: string }) => (
+  <Icon {...p}>
+    <path d="M20.8 11.2A5.5 5.5 0 0 0 12 5.2a5.5 5.5 0 0 0-8.8 6c1.6 4 8.8 8.8 8.8 8.8s1.4-.9 3.1-2.3" />
+    <path d="M3.5 12h4l1.5-3 3 6 1.5-3h7" />
+  </Icon>
+);

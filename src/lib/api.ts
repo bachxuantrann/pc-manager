@@ -488,9 +488,38 @@ export interface SystemInfo {
   disks: DiskInfo[];
 }
 
+// ---- Smart Diagnosis ----
+
+export type DiagSeverity = "ok" | "info" | "warn" | "critical";
+export type DiagCategory = "memory" | "storage" | "startup" | "apps" | "windows" | "hardware";
+/** Không hành động nào tự xoá/đổi gì: Boost chạy sau hộp xác nhận; Open mở trang để xem trước & xác nhận. */
+export type DiagAction = { kind: "boost" } | { kind: "open"; page: string; label: string };
+export interface DiagFinding {
+  /** Mã quy tắc — dùng so trước/sau khi quét lại. */
+  id: string;
+  category: DiagCategory;
+  severity: DiagSeverity;
+  title: string;
+  detail: string;
+  metric: string | null;
+  action: DiagAction | null;
+}
+export interface DiagReport {
+  findings: DiagFinding[];
+  categories: { category: DiagCategory; severity: DiagSeverity }[];
+  notes: string[];
+  deep: boolean;
+  durationMs: number;
+}
+export interface DiagProgress {
+  step: string;
+  done: number;
+  total: number;
+}
+
 // ---- Tác vụ dài: backend ghi lại để cửa sổ mở lại nối lại được (xem src-tauri/src/jobs.rs) ----
 
-export type JobKind = "cleaner.scan" | "cleaner.clean" | "winsxs.analyze" | "winsxs.clean" | "winold.clean" | "disk.large" | "disk.dups";
+export type JobKind = "diagnosis.scan" | "cleaner.scan" | "cleaner.clean" | "winsxs.analyze" | "winsxs.clean" | "winold.clean" | "disk.large" | "disk.dups";
 
 export type JobOutcome = { ok: true; value: unknown } | { ok: false; value: unknown };
 
@@ -602,6 +631,9 @@ export const api = {
   settingsSetWhitelist: (paths: string[]) => invoke<string[]>("settings_set_whitelist", { paths }),
   settingsSetAutostart: (enabled: boolean) => invoke<boolean>("settings_set_autostart", { enabled }),
 
+  /** Quét nhanh (chỉ đọc, ~0.2 giây) hoặc quét sâu (+ DISM phân tích WinSxS, ~1 phút, cần admin). */
+  diagnosisRun: (deep: boolean, onProgress: (p: DiagProgress) => void) =>
+    tracked("diagnosis.scan", () => invoke<DiagReport>("diagnosis_run", { deep, onProgress: channel(onProgress) })),
   /** Đọc một lần (vài chục ms), không chạy nền. */
   systemInfo: () => invoke<SystemInfo>("system_info"),
 

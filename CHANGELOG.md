@@ -13,7 +13,15 @@ Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục củ
   xung), card đồ hoạ (VRAM, driver), mainboard & BIOS, RAM (số khe đã cắm/tổng, từng thanh: dung
   lượng, DDR4/DDR5, tốc độ thực tế và tốc độ thanh hỗ trợ, hãng, mã), ổ đĩa (model, dung lượng,
   NVMe/SATA/USB, SSD/HDD). Nút **Sao chép cấu hình** để dán gửi người khác. Không cần quyền admin,
-  không thu thập số serial hay tên máy.
+  không thu thập số serial hay tên máy. "Bật máy gần nhất" lấy đúng lần bật nguồn (kể cả khi Fast
+  Startup bật), không phải thời gian từ lần Restart.
+- **Chẩn đoán thông minh** (trang "Chẩn đoán", hoặc nút ở Tổng quan): một lần quét kiểm tra RAM, ổ
+  đĩa, rác, Thùng rác, app khởi động, app lâu không dùng, Windows (chờ khởi động lại, lâu chưa
+  Restart, Windows.old) và phần cứng (RAM chưa bật XMP/EXPO, ổ HDD, khe RAM trống). Mỗi nhóm có trạng
+  thái Tốt / Gợi ý / Cần chú ý / Nên xử lý; mỗi vấn đề có lý do kèm số liệu và nút xử lý (mở đúng
+  trang để xem trước & xác nhận; Boost chạy sau hộp xác nhận). Quét lại sẽ hiện **đã cải thiện gì**
+  (số liệu trước → sau). Quét nhanh chỉ đọc, dưới 1 giây; "Quét sâu" thêm phân tích WinSxS (~1 phút,
+  cần quyền Administrator).
 
 ### Thay đổi
 - Trang Cài đặt sắp lại: card cùng hàng cao bằng nhau.

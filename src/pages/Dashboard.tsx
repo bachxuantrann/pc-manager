@@ -1,5 +1,7 @@
 import PageShell from "../components/PageShell";
 import ArcGauge from "../components/ArcGauge";
+import Button from "../components/Button";
+import { useNavigate } from "../hooks/useNavigate";
 import BoostPanel from "../components/BoostPanel";
 import UsageChart from "../components/UsageChart";
 import { Card, Notice, Stat } from "../components/Card";
@@ -10,6 +12,7 @@ import { formatBytes, pct } from "../lib/format";
 export default function Dashboard() {
   const { overview, history, error } = useMemoryFeed();
   const s = overview?.status;
+  const navigate = useNavigate();
 
   return (
     <PageShell title="Tổng quan" subtitle="Tình trạng bộ nhớ, cập nhật mỗi 2 giây khi cửa sổ đang mở">
@@ -34,6 +37,15 @@ export default function Dashboard() {
           <UsageChart samples={history} minHeight={160} />
         </Card>
       </div>
+      <Card className="mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3 2xl:mt-6">
+        <div className="min-w-0">
+          <div className="font-medium">Chẩn đoán thông minh</div>
+          <div className="text-sm opacity-60">Kiểm tra RAM, ổ đĩa, rác, app khởi động, Windows và phần cứng trong một lần quét — chỉ đọc, vài giây.</div>
+        </div>
+        <Button variant="primary" onClick={() => navigate("diagnosis")}>
+          Chẩn đoán máy
+        </Button>
+      </Card>
       <Card title="Tăng tốc" className="mt-4 shrink-0 2xl:mt-6">
         <BoostPanel />
       </Card>

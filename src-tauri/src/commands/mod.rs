@@ -127,3 +127,17 @@ pub async fn system_info() -> AppResult<crate::hwinfo::SystemInfo> {
         .await
         .map_err(|e| crate::error::task_failed("đọc cấu hình máy", e))
 }
+
+/// Smart Diagnosis: quét nhanh (chỉ đọc, ~vài trăm ms) hoặc quét sâu (+ phân tích WinSxS bằng DISM).
+/// Tiến độ theo bước qua `on_progress`; chạy như tác vụ dài (cửa sổ mở lại vẫn nối lại được).
+#[tauri::command]
+pub async fn diagnosis_run(
+    app: AppHandle,
+    deep: bool,
+    on_progress: tauri::ipc::Channel<crate::diagnosis::DiagProgress>,
+) -> AppResult<crate::diagnosis::Report> {
+    crate::jobs::run(app, "diagnosis.scan", "chẩn đoán máy", Some(on_progress), move |s, report| {
+        crate::diagnosis::run(s, deep, &|p| report(p))
+    })
+    .await
+}

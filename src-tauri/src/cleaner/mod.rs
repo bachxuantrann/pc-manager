@@ -234,6 +234,16 @@ impl CleanerManager {
     }
 
     pub fn scan(&self, on_progress: &(dyn Fn(Progress) + Sync)) -> AppResult<ScanResult> {
+        self.scan_impl(on_progress, true)
+    }
+
+    /// Quét như `scan` nhưng KHÔNG thay kết quả quét đang dùng ở trang Dọn rác (Smart Diagnosis chỉ
+    /// cần ước lượng dung lượng; thay kết quả sẽ làm hỏng bản xem trước người dùng đang mở).
+    pub fn estimate(&self) -> AppResult<ScanResult> {
+        self.scan_impl(&|_| {}, false)
+    }
+
+    fn scan_impl(&self, on_progress: &(dyn Fn(Progress) + Sync), keep: bool) -> AppResult<ScanResult> {
         let _g = self.lock_running()?;
         self.cancel.store(false, Ordering::Relaxed);
         let started = Instant::now();
@@ -289,8 +299,8 @@ impl CleanerManager {
             rules_out.push(summary);
         }
         let total_bytes = rules_out.iter().filter(|r| matches!(r.status, RuleStatus::Ready)).map(|r| r.bytes).sum();
-        // Quét bị huỷ dở thì không được dùng để dọn.
-        {
+        // Quét bị huỷ dở thì không được dùng để dọn. Ước lượng (keep = false) không đụng tới kết quả cũ.
+        if keep {
             let mut last = self.last.lock_recover();
             *last = (!cancelled).then(|| StoredScan { id, at: Instant::now(), data });
         }

@@ -213,6 +213,7 @@ const drives = [
 
 // Lịch sử RAM dao động nhẹ để biểu đồ trông thật.
 let tick = 0;
+let diagRuns = 0;
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   app_info: () => ({ version: "1.0.0", isElevated: true, pid: 4321, startPage: page }),
   memory_status: () => memory(Math.round(58 + 6 * Math.sin(tick++ / 3))),
@@ -226,6 +227,29 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   settings_get: () => settings,
   recent_actions: () => actions,
   system_windows_old_info: () => ({ path: "C:\\Windows.old", exists: false, bytes: null }),
+  diagnosis_run: () => {
+    diagRuns++;
+    const fixed = diagRuns > 1;
+    const findings = [
+      fixed
+        ? { id: "junk", category: "storage", severity: "ok", title: "Ít rác", detail: "Không có nhiều file tạm/cache cần dọn.", metric: "120 MB", action: null }
+        : { id: "junk", category: "storage", severity: "warn", title: "Có 4.2 GB rác dọn được", detail: "File tạm, cache, bản ghi lỗi… Xem trước rồi chọn mục muốn dọn.", metric: "4.2 GB", action: { kind: "open", page: "cleaner", label: "Xem & dọn" } },
+      { id: "disk-system", category: "storage", severity: fixed ? "warn" : "critical", title: "Ổ hệ thống C: sắp đầy", detail: "Windows cần chỗ trống để cập nhật và tạo file tạm; ổ đầy làm máy chậm.", metric: fixed ? "ổ C: còn 11% (27.5 GB)" : "ổ C: còn 9% (23.1 GB)", action: { kind: "open", page: "cleaner", label: "Dọn rác" } },
+      { id: "startup", category: "startup", severity: "warn", title: "16 app khởi động cùng Windows", detail: "Nhiều app chạy lúc bật máy làm khởi động lâu và tốn RAM. Tắt bớt app không cần (không xoá app).", metric: "16 app", action: { kind: "open", page: "startup", label: "Xem app khởi động" } },
+      { id: "ram", category: "memory", severity: "ok", title: "RAM ổn", detail: "Còn đủ bộ nhớ trống.", metric: "còn trống 41% (13.1 GB)", action: null },
+      { id: "apps-unused", category: "apps", severity: "info", title: "3 app không dùng hơn 6 tháng (9.4 GB)", detail: "Lớn nhất: Adobe Photoshop 2024, Blender 3.6. Gỡ app không cần để lấy lại dung lượng.", metric: "3 app · 9.4 GB", action: { kind: "open", page: "apps", label: "Xem ứng dụng" } },
+      { id: "restart", category: "windows", severity: "info", title: "18 ngày chưa khởi động lại hẳn", detail: "Restart giúp giải phóng bộ nhớ bị giữ lâu và áp dụng cập nhật. Fast Startup đang bật nên Shut down rồi mở máy không làm mới Windows — chỉ Restart mới làm.", metric: "18 ngày", action: null },
+      { id: "ram-xmp", category: "hardware", severity: "info", title: "RAM đang chạy chậm hơn mức hỗ trợ", detail: "Bật XMP (Intel) / EXPO (AMD) trong BIOS để RAM chạy đúng tốc độ. Chỉ làm nếu bạn quen chỉnh BIOS.", metric: "4800 / 6000 MT/s", action: null },
+    ];
+    const rank = { ok: 0, info: 1, warn: 2, critical: 3 } as Record<string, number>;
+    findings.sort((a, b) => rank[b.severity] - rank[a.severity]);
+    const cats = ["memory", "storage", "startup", "apps", "windows", "hardware"].map((c) => ({
+      category: c,
+      severity: findings.filter((f) => f.category === c).reduce((m, f) => (rank[f.severity] > rank[m] ? f.severity : m), "ok"),
+    }));
+    return { findings, categories: cats, notes: [], deep: false, durationMs: 214 };
+  },
+  memory_boost: () => ({ gain: { availableGain: 1.2 * GB, standbyCleared: 900 * MB } }),
   system_info: () => ({
     windows: { product: "Windows 11 Pro", displayVersion: "24H2", build: "26100.4061", installDateMs: now - 400 * DAY, lastPowerOnMs: now - (7 * 3600 + 49 * 60) * 1000, uptimeSecs: 12 * 86400 + 8 * 3600, sinceWakeSecs: 3 * 3600 + 20 * 60, fastStartup: true, architecture: "x64" },
     cpu: { name: "AMD Ryzen 7 7800X3D 8-Core Processor", socket: "AM5", cores: 8, threads: 16, baseMhz: 4200, maxMhz: 5050 },

@@ -8,6 +8,8 @@ import { MemoryFeedProvider } from "./hooks/useMemoryFeed";
 import { ElevationProvider } from "./components/Elevation";
 import Dashboard from "./pages/Dashboard";
 import SystemInfoPage from "./pages/SystemInfo";
+import Diagnosis from "./pages/Diagnosis";
+import { NavigateContext } from "./hooks/useNavigate";
 import Memory from "./pages/Memory";
 import Cleaner from "./pages/Cleaner";
 import Processes from "./pages/Processes";
@@ -18,6 +20,7 @@ import Settings from "./pages/Settings";
 
 const PAGES: Record<PageId, () => JSX.Element> = {
   dashboard: Dashboard,
+  diagnosis: Diagnosis,
   system: SystemInfoPage,
   memory: Memory,
   cleaner: Cleaner,
@@ -30,6 +33,7 @@ const PAGES: Record<PageId, () => JSX.Element> = {
 
 /** Trang hiển thị từng loại tác vụ dài của backend. */
 const JOB_PAGE: Record<JobKind, PageId> = {
+  "diagnosis.scan": "diagnosis",
   "cleaner.scan": "cleaner",
   "cleaner.clean": "cleaner",
   "winsxs.analyze": "cleaner",
@@ -76,6 +80,7 @@ export default function App() {
   );
   return (
     <ThemeContext.Provider value={theme}>
+    <NavigateContext.Provider value={setPage}>
     <ElevationProvider page={page} onStartPage={openStart}>
     <MemoryFeedProvider>
       <div className="flex h-full">
@@ -97,6 +102,7 @@ export default function App() {
       </div>
     </MemoryFeedProvider>
     </ElevationProvider>
+    </NavigateContext.Provider>
     </ThemeContext.Provider>
   );
 }

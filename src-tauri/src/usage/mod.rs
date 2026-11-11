@@ -232,6 +232,43 @@ pub fn list(store: &Store, on_progress: &(dyn Fn(AppsProgress) + Sync)) -> AppRe
     })
 }
 
+/// App lâu không dùng (chỉ app có ghi nhận lần chạy; app chưa rõ lần dùng thì bỏ để tránh báo nhầm).
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnusedSummary {
+    pub count: usize,
+    /// Tổng dung lượng app tự khai trong registry (không đo thư mục).
+    pub bytes: u64,
+    /// Vài app lớn nhất: (tên, dung lượng, lần dùng cuối ms).
+    pub top: Vec<(String, u64, i64)>,
+}
+
+/// Bản nhẹ cho Smart Diagnosis: KHÔNG đo dung lượng thư mục (chỉ số registry), không pool nền.
+pub fn unused_summary(store: &Store, older_than_ms: i64) -> UnusedSummary {
+    let apps = installed::list();
+    let ua = userassist::read();
+    let index = UsageIndex::build(store, &ua, prefetch::read());
+    let cutoff = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
+        .map_or(i64::MIN, |now| now.saturating_sub(older_than_ms));
+    let mut unused: Vec<(String, u64, i64)> = apps
+        .iter()
+        .filter(|a| !a.no_remove && a.uninstall.is_some())
+        .filter_map(|a| {
+            let (last, _) = index.last_used(a, &app_exes(a))?;
+            (last < cutoff).then(|| (a.name.clone(), a.estimated_bytes.unwrap_or(0), last))
+        })
+        .collect();
+    unused.sort_by_key(|u| std::cmp::Reverse(u.1));
+    UnusedSummary {
+        count: unused.len(),
+        bytes: unused.iter().map(|u| u.1).sum(),
+        top: unused.into_iter().take(3).collect(),
+    }
+}
+
 fn app_info(a: &Installed, index: &UsageIndex, deadline: Instant) -> AppInfo {
     let exes = app_exes(a);
     let used = index.last_used(a, &exes);

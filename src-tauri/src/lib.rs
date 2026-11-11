@@ -11,6 +11,7 @@
 pub mod bg;
 pub mod commands;
 pub mod crashlog;
+pub mod diagnosis;
 pub mod error;
 pub mod hwinfo;
 pub mod jobs;
@@ -195,6 +196,7 @@ pub fn run() {
             commands::jobs_snapshot,
             commands::jobs_ack,
             commands::system_info,
+            commands::diagnosis_run,
             commands::memory::memory_status,
             commands::memory::memory_boost,
             commands::memory::memory_smart_boost,
