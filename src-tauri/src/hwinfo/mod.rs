@@ -20,6 +20,8 @@ pub struct WindowsInfo {
     /// vd "26100.4061".
     pub build: Option<String>,
     pub install_date_ms: Option<i64>,
+    /// Lần bật nguồn máy gần nhất (unix ms) — kể cả bật máy khi Fast Startup đang bật; không tính thức dậy từ Sleep.
+    pub last_power_on_ms: Option<i64>,
     /// Từ lần khởi động THẬT gần nhất (Restart). Với Fast Startup, Shut down không đặt lại số này.
     pub uptime_secs: u64,
     /// Từ lần mở máy / thức dậy gần nhất (Sleep, Hibernate, bật máy khi có Fast Startup). None = chưa
@@ -99,6 +101,55 @@ fn product_name(raw: &str, build: Option<u32>) -> String {
     }
 }
 
+/// `YYYY-MM-DDTHH:MM:SS[.fffffff]Z` (UTC, như `SystemTime` trong nhật ký sự kiện) → unix ms.
+fn parse_utc(s: &str) -> Option<i64> {
+    let num = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
+    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (h, mi, se) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || h > 23 || mi > 59 || se > 60 {
+        return None;
+    }
+    // days_from_civil (Howard Hinnant).
+    let y2 = if mo <= 2 { y - 1 } else { y };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * ((mo + 9) % 12) + 2) / 5 + d - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    Some(((days * 24 + h) * 60 + mi) * 60_000 + se * 1000)
+}
+
+/// Thời điểm bật nguồn máy gần nhất (unix ms): sự kiện Kernel-Boot 27 mà Windows ghi mỗi lần bật
+/// máy — kể cả khi Fast Startup bật (Shut down rồi mở máy), không tính thức dậy từ Sleep.
+/// Đọc qua `wevtutil` một lần khi mở trang (không nạp thêm DLL vào app; tài khoản thường đọc được).
+/// Không đọc được => lần khởi động thật gần nhất.
+fn last_power_on_ms() -> Option<i64> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let boot_fallback = || {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_millis();
+        let up = u128::from(sys::firmware::uptime_secs()) * 1000;
+        i64::try_from(now.checked_sub(up)?).ok()
+    };
+    let exe = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join(r"System32\wevtutil.exe");
+    let out = std::process::Command::new(exe)
+        .args([
+            "qe",
+            "System",
+            "/q:*[System[Provider[@Name='Microsoft-Windows-Kernel-Boot'] and (EventID=27)]]",
+            "/c:1",
+            "/rd:true",
+            "/f:xml",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    let from_log = out.ok().filter(|o| o.status.success()).and_then(|o| {
+        let xml = String::from_utf8_lossy(&o.stdout).into_owned();
+        let start = xml.find("SystemTime='")? + "SystemTime='".len();
+        parse_utc(xml.get(start..)?)
+    });
+    from_log.or_else(boot_fallback)
+}
+
 fn windows_info() -> WindowsInfo {
     let key = LOCAL_MACHINE.open(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion").ok();
     let s = |n: &str| key.as_ref().and_then(|k| reg_string(k, n));
@@ -109,6 +160,7 @@ fn windows_info() -> WindowsInfo {
         display_version: s("DisplayVersion").or_else(|| s("ReleaseId")),
         build: build_no.map(|b| ubr.map_or_else(|| b.to_string(), |u| format!("{b}.{u}"))),
         install_date_ms: key.as_ref().and_then(|k| k.get_u32("InstallDate").ok()).filter(|&t| t > 0).map(|t| i64::from(t) * 1000),
+        last_power_on_ms: last_power_on_ms(),
         uptime_secs: sys::firmware::uptime_secs(),
         since_wake_secs: sys::firmware::secs_since_last_wake(),
         fast_startup: LOCAL_MACHINE
@@ -254,6 +306,15 @@ mod tests {
         assert_eq!(product_name("Windows 10 Pro", Some(19045)), "Windows 10 Pro");
         assert_eq!(product_name("Windows 10 Enterprise", None), "Windows 10 Enterprise");
         assert_eq!(product_name("Windows Server 2022", Some(20348)), "Windows Server 2022");
+    }
+
+    #[test]
+    fn parses_event_log_utc_time() {
+        assert_eq!(parse_utc("1970-01-01T00:00:00.0000000Z"), Some(0));
+        assert_eq!(parse_utc("2026-11-11T01:35:29.5123456Z"), Some(1_794_360_929_000));
+        assert_eq!(parse_utc("2024-02-29T12:00:00Z"), Some(1_709_208_000_000));
+        assert_eq!(parse_utc("2026-13-01T00:00:00Z"), None);
+        assert_eq!(parse_utc("rác"), None);
     }
 
     #[test]

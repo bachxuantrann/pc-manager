@@ -227,7 +227,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   recent_actions: () => actions,
   system_windows_old_info: () => ({ path: "C:\\Windows.old", exists: false, bytes: null }),
   system_info: () => ({
-    windows: { product: "Windows 11 Pro", displayVersion: "24H2", build: "26100.4061", installDateMs: now - 400 * DAY, uptimeSecs: 12 * 86400 + 8 * 3600, sinceWakeSecs: 3 * 3600 + 20 * 60, fastStartup: true, architecture: "x64" },
+    windows: { product: "Windows 11 Pro", displayVersion: "24H2", build: "26100.4061", installDateMs: now - 400 * DAY, lastPowerOnMs: now - (7 * 3600 + 49 * 60) * 1000, uptimeSecs: 12 * 86400 + 8 * 3600, sinceWakeSecs: 3 * 3600 + 20 * 60, fastStartup: true, architecture: "x64" },
     cpu: { name: "AMD Ryzen 7 7800X3D 8-Core Processor", socket: "AM5", cores: 8, threads: 16, baseMhz: 4200, maxMhz: 5050 },
     gpus: [{ name: "NVIDIA GeForce RTX 4070", vendor: "NVIDIA", vramBytes: 12 * GB, driverVersion: "32.0.15.7270", driverDate: "5-20-2025" }],
     board: { systemManufacturer: null, systemProduct: null, manufacturer: "ASUSTeK COMPUTER INC.", product: "TUF GAMING B650-PLUS WIFI", version: "Rev 1.xx" },

@@ -159,20 +159,10 @@ export default function SystemInfoPage() {
             <Row label="Build">{w?.build}</Row>
             <Row label="Kiến trúc">{w?.architecture}</Row>
             <Row label="Ngày cài">{w?.installDateMs ? formatDate(w.installDateMs) : null}</Row>
-            {w && (
-              <Row label="Thức dậy gần nhất">
-                {/* Sleep, Hibernate, hoặc bật máy khi Fast Startup đang bật. */}
-                {w.sinceWakeSecs != null ? `${ago(w.sinceWakeSecs)} (${uptime(w.sinceWakeSecs)} trước)` : "chưa thức dậy lần nào từ lần khởi động lại"}
-              </Row>
-            )}
-            {w && (
-              <Row label="Khởi động lại gần nhất">
-                {ago(w.uptimeSecs)} ({uptime(w.uptimeSecs)} trước)
-                {w.fastStartup && (
-                  <div className="mt-0.5 text-xs opacity-60">
-                    Fast Startup đang bật: Shut down rồi mở máy không khởi động lại hẳn Windows. Muốn làm mới hoàn toàn, hãy chọn Restart.
-                  </div>
-                )}
+            {/* Lần bật nguồn gần nhất (kể cả khi Fast Startup bật), không tính thức dậy từ Sleep. */}
+            {w?.lastPowerOnMs != null && (
+              <Row label="Bật máy gần nhất">
+                {ago((Date.now() - w.lastPowerOnMs) / 1000)} ({uptime((Date.now() - w.lastPowerOnMs) / 1000)} trước)
               </Row>
             )}
           </Card>
