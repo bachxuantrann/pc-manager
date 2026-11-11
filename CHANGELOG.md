@@ -3,6 +3,25 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.1.2] - 2026-11-11
+
+### Sửa lỗi
+- **Chẩn đoán không còn đề xuất "Kho WinSxS nên được dọn" khi dọn chẳng được gì.** Trước đây quét sâu
+  cứ làm theo câu "nên dọn" của DISM — câu này hay báo "Có" mãi, kể cả khi bấm Dọn WinSxS chỉ được
+  0 byte. Giờ PC Manager nhớ kết quả các lần phân tích/dọn và tự đánh giá:
+  - Dọn mà không lấy lại được gì => các gói còn lại là phần Windows đang giữ; không đề xuất nữa cho
+    tới khi có bản cập nhật Windows mới (hoặc sau 30 ngày).
+  - Vừa dọn từ lần khởi động gần nhất => phần còn lại chỉ dọn được sau khi khởi động lại máy.
+  - **Windows đang chờ khởi động lại để hoàn tất cập nhật** => không đề xuất dọn WinSxS (lúc này DISM
+    gần như không gỡ được gì), chỉ đề xuất Restart. Lần dọn lỡ bấm trong lúc này không bị tính là
+    "dọn vô ích", sau khi Restart vẫn được đề xuất lại nếu còn cần.
+- Dọn rác → Dọn sâu hệ thống → **Phân tích** WinSxS hiện kết luận rõ ràng ("Nên dọn" / "Chưa cần dọn" /
+  "Khởi động lại máy trước") kèm lý do; thông báo sau khi dọn được 0 byte nói đúng nguyên nhân.
+
+### Thay đổi
+- Trang Chẩn đoán khi PC Manager chạy quyền thường hiện thông báo "Quét sâu cần quyền Administrator"
+  kèm nút **Chạy với quyền Administrator** (giống các trang khác), mở lại thẳng trang Chẩn đoán.
+
 ## [1.1.1] - 2026-11-11
 
 ### Thay đổi

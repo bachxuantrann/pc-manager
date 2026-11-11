@@ -315,10 +315,20 @@ export interface WinSxsAnalysis {
   cache: string | null;
   reclaimablePackages: number | null;
   lastCleanup: string | null;
+  /** "Recommended" nguyên văn của DISM (hay báo Yes mãi kể cả khi dọn không được gì). */
   recommended: boolean | null;
+  /** Đánh giá của PC Manager: dọn bây giờ có tác dụng không. */
+  verdict: WinSxsVerdict;
   raw: string;
   durationMs: number;
 }
+
+/**
+ * notNeeded: DISM không khuyên dọn. recommended: nên dọn. pendingRestart: Windows đang chờ khởi động
+ * lại để hoàn tất cập nhật — khởi động lại trước. afterRestart: đã dọn từ lần khởi động gần nhất, phần
+ * còn lại cần khởi động lại. stuck: lần dọn trước không lấy lại được gì, chưa có gói mới.
+ */
+export type WinSxsVerdict = "notNeeded" | "recommended" | "pendingRestart" | "afterRestart" | "stuck";
 
 export interface SystemCleanReport {
   freedBytes: number;

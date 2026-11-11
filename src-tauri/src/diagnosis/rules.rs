@@ -82,7 +82,7 @@ pub struct Snapshot {
     pub ram_slots_free: Option<u32>,
     /// Mọi ổ trong máy đều là HDD (=> Windows chắc chắn trên HDD).
     pub all_disks_hdd: bool,
-    /// Chỉ có khi "Quét sâu": DISM khuyên dọn WinSxS.
+    /// Chỉ có khi "Quét sâu": dọn WinSxS lúc này có tác dụng (DISM khuyên + lần dọn trước không vô ích).
     pub winsxs_recommended: Option<bool>,
 }
 

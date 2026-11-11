@@ -21,9 +21,12 @@ function freedText(r: SystemCleanReport, what: "winsxs" | "winold"): string {
   if (r.freedBytes >= NOTHING_FREED) return `Xong sau ${secs} giây — giải phóng khoảng ${formatBytes(r.freedBytes)}.${reboot}`;
   if (what === "winsxs") {
     // DISM trả "thành công" ngay cả khi không còn gì để dọn (vd. vừa dọn xong lần trước).
+    if (r.rebootRequired)
+      return `Xong sau ${secs} giây — chưa dọn được gì vì Windows đang chờ khởi động lại để hoàn tất bản cập nhật. Hãy Restart máy (không phải Shut down) rồi dọn lại.`;
     return (
-      `DISM báo thành công sau ${secs} giây nhưng không còn gì để dọn thêm — kho đã được dọn gần đây.${reboot} ` +
-      "Nếu bấm Phân tích vẫn thấy còn gói có thể thu hồi, thường phải khởi động lại máy rồi dọn lại."
+      `Xong sau ${secs} giây — không còn gì dọn được lúc này. ` +
+      'Phân tích có thể vẫn báo "gói có thể thu hồi": đó là phần Windows đang giữ, dọn lại không có tác dụng. ' +
+      "PC Manager sẽ không đề xuất dọn WinSxS nữa cho tới khi có bản cập nhật Windows mới."
     );
   }
   return `Xong sau ${secs} giây — không thấy dung lượng trống tăng thêm.${reboot}`;
@@ -50,14 +53,34 @@ function AnalysisView({ a }: { a: WinSxsAnalysis }) {
       {row("├ Bản sao lưu, tính năng tắt", a.backups, "dọn được một phần (bản cũ đã bị thay thế)")}
       {row("└ Cache, dữ liệu tạm", a.cache, "dọn được")}
       <div className="mt-1">
-        {a.recommended ? (
-          <b className="text-amber-700 dark:text-amber-300">DISM khuyên nên dọn</b>
+        {a.verdict === "recommended" ? (
+          <b className="text-amber-700 dark:text-amber-300">Nên dọn</b>
+        ) : a.verdict === "pendingRestart" ? (
+          <b className="text-amber-700 dark:text-amber-300">Khởi động lại máy trước</b>
         ) : (
           <span className="text-green-700 dark:text-green-400">Chưa cần dọn</span>
         )}
-        {a.reclaimablePackages != null && ` · ${a.reclaimablePackages} gói có thể thu hồi`}
+        {a.reclaimablePackages != null && ` · DISM báo ${a.reclaimablePackages} gói có thể thu hồi`}
         {a.lastCleanup && <span className="opacity-60"> · lần dọn gần nhất: {a.lastCleanup}</span>}
       </div>
+      {a.verdict === "pendingRestart" && (
+        <p className="opacity-70">
+          Windows đang chờ khởi động lại để hoàn tất bản cập nhật — trong lúc này DISM gần như không dọn được gì. Hãy Restart
+          máy (không phải Shut down) trước, rồi Phân tích lại.
+        </p>
+      )}
+      {a.verdict === "afterRestart" && (
+        <p className="opacity-70">
+          Đã dọn sau lần khởi động gần nhất. Phần DISM còn báo chỉ dọn được sau khi khởi động lại máy (Restart) — dọn lại bây
+          giờ sẽ không lấy lại thêm gì.
+        </p>
+      )}
+      {a.verdict === "stuck" && (
+        <p className="opacity-70">
+          DISM vẫn báo "nên dọn", nhưng lần dọn trước không lấy lại được gì: các gói còn lại Windows đang giữ (thường là bản
+          cập nhật gốc), dọn lại không có tác dụng. PC Manager sẽ đề xuất lại khi có bản cập nhật Windows mới.
+        </p>
+      )}
     </div>
   );
 }

@@ -56,7 +56,7 @@ pub async fn system_windows_old_info(app: AppHandle) -> AppResult<WindowsOldInfo
 /// `DISM /AnalyzeComponentStore` — chỉ đọc, ~1 phút, cần quyền admin. Tiến độ % qua `on_progress`.
 #[tauri::command]
 pub async fn system_analyze_winsxs(app: AppHandle, on_progress: Channel<f32>) -> AppResult<WinSxsAnalysis> {
-    jobs::run(app, "winsxs.analyze", "dọn rác", Some(on_progress), |s, report| s.system.analyze_winsxs(&|p| report(p))).await
+    jobs::run(app, "winsxs.analyze", "dọn rác", Some(on_progress), |s, report| s.system.analyze_winsxs(&s.store, &|p| report(p))).await
 }
 
 /// Dọn WinSxS bằng DISM /StartComponentCleanup. Tiến độ % qua `on_progress`.

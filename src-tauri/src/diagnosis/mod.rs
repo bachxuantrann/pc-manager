@@ -141,8 +141,10 @@ pub fn run(state: &AppState, deep: bool, report: &dyn Fn(DiagProgress)) -> AppRe
 
     if deep {
         step(7);
-        match state.system.analyze_winsxs(&|_| {}) {
-            Ok(a) => s.winsxs_recommended = a.recommended,
+        match state.system.analyze_winsxs(&state.store, &|_| {}) {
+            // Theo đánh giá của PC Manager, không phải "Recommended" nguyên văn của DISM (hay báo Yes
+            // mãi cả khi dọn không lấy lại được gì).
+            Ok(a) => s.winsxs_recommended = Some(a.verdict == crate::cleaner::system::WinSxsVerdict::Recommended),
             Err(e) => notes.push(format!("Không phân tích được WinSxS: {e}")),
         }
     }

@@ -5,7 +5,7 @@ import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog"
 import PageShell from "../components/PageShell";
 import ProgressBar from "../components/ProgressBar";
 import type { PageId } from "../components/Sidebar";
-import { useElevation } from "../components/Elevation";
+import { AdminNotice, useElevation } from "../components/Elevation";
 import { useJobResume } from "../hooks/useJobResume";
 import { useNavigate } from "../hooks/useNavigate";
 import { useReportBusy } from "../hooks/usePageActive";
@@ -176,6 +176,11 @@ export default function Diagnosis() {
         </div>
       }
     >
+      {elevated === false && (
+        <div className="mb-3">
+          <AdminNotice>Quét sâu (phân tích kho WinSxS bằng DISM) cần quyền Administrator.</AdminNotice>
+        </div>
+      )}
       {error && (
         <div className="mb-3">
           <Notice tone="error" onClose={() => setError(null)}>
