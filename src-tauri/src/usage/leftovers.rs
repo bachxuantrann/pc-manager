@@ -20,7 +20,7 @@ use crate::cleaner::safety::{is_link_or_cloud, norm, BanCtx};
 use crate::error::{AppError, AppResult};
 use crate::store::Store;
 use crate::sys::com::ComGuard;
-use crate::sys::{process, recycle, shell};
+use crate::sys::{process, shell};
 
 const SCAN_TTL: Duration = Duration::from_secs(30 * 60);
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -249,7 +249,7 @@ struct Roots {
 
 impl Roots {
     fn from_env() -> Self {
-        let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty()).map(PathBuf::from);
+        let env = |k: &str| crate::user::env(k).filter(|v| !v.is_empty()).map(PathBuf::from);
         let mut data = Vec::new();
         let mut start_menu = Vec::new();
         if let Some(a) = env("APPDATA") {
@@ -495,7 +495,7 @@ pub struct Dependency {
 fn system_commands() -> Vec<(DependencyKind, String, String)> {
     const SERVICES: &str = r"SYSTEM\CurrentControlSet\Services";
     let windir = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-    let expand = |s: &str| crate::startup::command::expand_env(s, |k| std::env::var(k).ok());
+    let expand = |s: &str| crate::startup::command::expand_env(s, crate::user::env);
     let mut out = Vec::new();
     if let Ok(key) = windows_registry::LOCAL_MACHINE.open(SERVICES) {
         for name in key.keys().into_iter().flatten() {
@@ -735,7 +735,7 @@ fn recycle_checked(guard: &Guard, item: &Item, path: &Path) -> Result<(), String
     if meta.is_dir() && guard.running_inside(path) {
         return Err("có chương trình đang chạy từ thư mục này".into());
     }
-    recycle::move_to_recycle_bin(path)?;
+    crate::user::recycle::move_to_recycle_bin(path)?;
     if path.exists() {
         return Err("một phần bị khoá, chưa chuyển hết vào Thùng rác".into());
     }

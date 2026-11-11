@@ -17,7 +17,7 @@ use super::OwnedHandle;
 /// Privilege cần cho đọc/purge standby list.
 pub const SE_PROFILE_SINGLE_PROCESS: &str = "SeProfileSingleProcessPrivilege";
 
-fn open_current_token(access: TOKEN_ACCESS_MASK) -> windows::core::Result<OwnedHandle> {
+pub(super) fn open_current_token(access: TOKEN_ACCESS_MASK) -> windows::core::Result<OwnedHandle> {
     let mut raw = HANDLE::default();
     // SAFETY: GetCurrentProcess trả pseudo-handle không cần đóng; `raw` là
     // out-pointer hợp lệ trên stack.

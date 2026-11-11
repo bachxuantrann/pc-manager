@@ -13,8 +13,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const APP_DIR: &str = "com.pcmanager.app";
 const MAX_BYTES: u64 = 256 * 1024;
 
+/// Nâng quyền bằng tài khoản admin khác => log vẫn ghi vào profile của user đang đăng nhập.
 pub fn log_path() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(APP_DIR).join("logs").join("crash.log"))
+    crate::sys::session::other_interactive_user_roaming_appdata()
+        .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
+        .map(|d| d.join(APP_DIR).join("logs").join("crash.log"))
 }
 
 /// Dòng ghi cho một panic (tách riêng để test).

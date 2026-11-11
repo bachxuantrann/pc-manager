@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use windows_registry::{Key, Type, CURRENT_USER, LOCAL_MACHINE};
+use windows_registry::{Key, Type, LOCAL_MACHINE};
 
 use crate::error::{AppError, AppResult};
 use crate::process::publisher::{Publisher, PublisherCache};
@@ -51,10 +51,12 @@ enum Hive {
 }
 
 impl Hive {
-    fn key(self) -> &'static Key {
+    /// Gốc registry. `User` là HKCU của user đang đăng nhập (`HKU<SID>` khi app được nâng
+    /// quyền bằng tài khoản admin khác — Run/StartupApproved của admin không phải của người dùng).
+    fn key(self) -> windows_registry::Result<Key> {
         match self {
-            Hive::User => CURRENT_USER,
-            Hive::Machine => LOCAL_MACHINE,
+            Hive::User => crate::user::hkcu(),
+            Hive::Machine => LOCAL_MACHINE.open(""),
         }
     }
     fn prefix(self) -> &'static str {
@@ -87,7 +89,7 @@ fn folder_source(s: Source) -> Option<(PathBuf, Hive)> {
         Source::StartupFolderCommon => ("ProgramData", r"Microsoft\Windows\Start Menu\Programs\StartUp", Hive::Machine),
         _ => return None,
     };
-    Some((PathBuf::from(std::env::var(var).ok()?).join(rel), hive))
+    Some((PathBuf::from(crate::user::env(var)?).join(rel), hive))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -124,7 +126,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn expand(&self, s: &str) -> String {
-        command::expand_env(s, |k| std::env::var(k).ok())
+        command::expand_env(s, crate::user::env)
     }
 
     fn exe(&self, cmd: &str) -> Option<PathBuf> {
@@ -156,7 +158,9 @@ pub fn list(publishers: &PublisherCache) -> AppResult<Vec<StartupEntry>> {
     ] {
         if let Some((hive, run, approved)) = reg_source(s) {
             let approved_path = approved.map(|a| format!(r"{APPROVED_BASE}\{a}"));
-            out.extend(read_run(&ctx, s, hive, hive.key(), run, approved_path.as_deref()));
+            if let Ok(root) = hive.key() {
+                out.extend(read_run(&ctx, s, hive, &root, run, approved_path.as_deref()));
+            }
         }
     }
     for s in [Source::StartupFolderUser, Source::StartupFolderCommon] {
@@ -212,7 +216,7 @@ fn read_folder(ctx: &Ctx, com: &ComGuard, source: Source) -> Vec<StartupEntry> {
     let Some((dir, hive)) = folder_source(source) else { return Vec::new() };
     let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
     let approved_path = format!(r"{APPROVED_BASE}\StartupFolder");
-    let approved = read_approved(hive.key(), Some(&approved_path));
+    let approved = hive.key().map(|root| read_approved(&root, Some(&approved_path))).unwrap_or_default();
     rd.flatten()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
         .filter_map(|e| {
@@ -340,18 +344,18 @@ pub fn set_enabled(store: &Store, source: Source, name: &str, enabled: bool) -> 
 fn set_enabled_inner(source: Source, name: &str, enabled: bool) -> AppResult<()> {
     if let Some((hive, run, Some(approved))) = reg_source(source) {
         // Chỉ cho phép tên đang thực sự có trong Run (không ghi tên tuỳ ý từ UI).
-        hive.key()
-            .open(run)
+        let root = hive.key()?;
+        root.open(run)
             .and_then(|k| k.get_value(name))
             .map_err(|_| AppError::NotFound(format!("không có '{name}' trong {}\\{run}", hive.prefix())))?;
-        return write_approved(hive.key(), &format!(r"{APPROVED_BASE}\{approved}"), name, enabled);
+        return write_approved(&root, &format!(r"{APPROVED_BASE}\{approved}"), name, enabled);
     }
     if let Some((dir, hive)) = folder_source(source) {
         // Chống path traversal: `name` phải đúng là một tên file nằm trong thư mục.
         if Path::new(name).file_name().and_then(|n| n.to_str()) != Some(name) || !dir.join(name).is_file() {
             return Err(AppError::NotFound(format!("không có '{name}' trong thư mục Startup")));
         }
-        return write_approved(hive.key(), &format!(r"{APPROVED_BASE}\StartupFolder"), name, enabled);
+        return write_approved(&hive.key()?, &format!(r"{APPROVED_BASE}\StartupFolder"), name, enabled);
     }
     Err(AppError::Forbidden("nguồn này chỉ đọc trong v1".into()))
 }
@@ -367,6 +371,7 @@ fn write_approved(root: &Key, approved_path: &str, name: &str, enabled: bool) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows_registry::CURRENT_USER;
 
     /// Registry giả trong HKCU\Software\PcManagerTest-<pid>-<thread> — xoá cả cây khi drop.
     struct Sandbox(String);

@@ -72,9 +72,9 @@ pub fn expand_known_folder(decoded: &str, env: &dyn Fn(&str) -> Option<String>) 
 
 /// Đọc toàn bộ UserAssist của người dùng hiện tại.
 pub fn read() -> Vec<Entry> {
-    let Ok(root) = windows_registry::CURRENT_USER.open(KEY) else { return Vec::new() };
+    let Ok(root) = crate::user::hkcu().and_then(|k| k.open(KEY)) else { return Vec::new() };
     let Ok(guids) = root.keys() else { return Vec::new() };
-    let env = |k: &str| std::env::var(k).ok();
+    let env = crate::user::env;
     let mut out = Vec::new();
     for g in guids {
         let Ok(count) = root.open(format!(r"{g}\Count")) else { continue };

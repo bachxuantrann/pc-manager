@@ -1,6 +1,6 @@
 [package]
 name = "pc-manager"
-version = "1.0.1"
+version = "1.0.2"
 description = "PC Manager — nhẹ, nhanh, an toàn"
 edition = "2021"
 rust-version = "1.85"
@@ -52,6 +52,7 @@ features = [
   "Win32_System_Registry",
   "Win32_Storage_FileSystem",
   "Win32_System_Services",
+  "Win32_System_RemoteDesktop",
 ]
 
 [profile.release]

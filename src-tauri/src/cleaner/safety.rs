@@ -55,8 +55,9 @@ pub struct BanCtx {
 }
 
 impl BanCtx {
+    /// Theo user đang đăng nhập (kể cả khi app được nâng quyền bằng tài khoản admin khác).
     pub fn from_env() -> Self {
-        let env = |k: &str| std::env::var(k).unwrap_or_default();
+        let env = |k: &str| crate::user::env(k).unwrap_or_default();
         let windows = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
         let profile = env("USERPROFILE");
         let users_root = Path::new(&profile).parent().map(|p| p.display().to_string()).unwrap_or_default();
@@ -72,6 +73,15 @@ impl BanCtx {
             }
         }
         user_folders.extend(redirected_known_folders());
+        // Nâng quyền bằng tài khoản admin khác: Dọn rác chỉ làm cho user đang đăng nhập —
+        // cấm hẳn toàn bộ profile của tài khoản admin.
+        if crate::user::is_other_user() {
+            if let Ok(admin_profile) = std::env::var("USERPROFILE") {
+                if !admin_profile.is_empty() {
+                    user_folders.push(admin_profile);
+                }
+            }
+        }
         Self {
             windows,
             user_profile: profile,
@@ -95,11 +105,11 @@ fn redirected_known_folders() -> Vec<String> {
         "{374DE290-123F-4565-9164-39C4925E467B}", // Downloads
         "Favorites",
     ];
-    let Ok(key) = windows_registry::CURRENT_USER.open(KEY) else { return Vec::new() };
+    let Ok(key) = crate::user::hkcu().and_then(|k| k.open(KEY)) else { return Vec::new() };
     NAMES
         .iter()
         .filter_map(|n| key.get_string(n).ok())
-        .map(|v| crate::startup::command::expand_env(&v, |k| std::env::var(k).ok()))
+        .map(|v| crate::startup::command::expand_env(&v, crate::user::env))
         .filter(|v| !v.contains('%'))
         .collect()
 }

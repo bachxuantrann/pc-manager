@@ -16,6 +16,7 @@ pub mod settings;
 pub mod state;
 pub mod sync;
 pub mod sys;
+pub mod user;
 mod tray;
 
 // Các module chức năng — được lấp đầy qua từng giai đoạn (xem PROMPTS.md).
@@ -144,7 +145,11 @@ pub fn run() {
 
     let result = tauri::Builder::default()
         .setup(move |app| {
-            let data_dir = app.path().app_data_dir().ok();
+            // Nâng quyền bằng tài khoản admin khác (máy domain): tài khoản đó chỉ để lấy quyền,
+            // cài đặt/lịch sử vẫn thuộc user đang đăng nhập => dùng AppData\Roaming của user đó.
+            let data_dir = sys::session::other_interactive_user_roaming_appdata()
+                .map(|d| d.join(&app.config().identifier))
+                .or_else(|| app.path().app_data_dir().ok());
             app.manage(AppState::init(data_dir.as_deref()));
             tray::setup(app.handle())?;
             spawn_auto_smart_boost(app.handle().clone());

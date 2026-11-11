@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use windows_registry::{Key, CURRENT_USER, LOCAL_MACHINE};
+use windows_registry::{Key, LOCAL_MACHINE};
 
 const UNINSTALL: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
 const UNINSTALL32: &str = r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -23,9 +23,16 @@ pub struct Installed {
     pub no_remove: bool,
 }
 
-fn sources() -> [(&'static Key, &'static str, &'static str); 3] {
-    [(LOCAL_MACHINE, UNINSTALL, "HKLM"), (LOCAL_MACHINE, UNINSTALL32, "HKLM32"), (CURRENT_USER, UNINSTALL, "HKCU")]
+/// Gốc registry của một nguồn. `HKCU` là của user đang đăng nhập (`HKU<SID>` khi app được nâng
+/// quyền bằng tài khoản admin khác), không phải của tài khoản admin.
+fn root_of(tag: &str) -> Option<Key> {
+    match tag {
+        "HKCU" => crate::user::hkcu().ok(),
+        _ => LOCAL_MACHINE.open("").ok(),
+    }
 }
+
+const SOURCES: [(&str, &str); 3] = [(UNINSTALL, "HKLM"), (UNINSTALL32, "HKLM32"), (UNINSTALL, "HKCU")];
 
 /// "20240115" → unix ms (00:00 UTC). Ngày không hợp lệ → None.
 pub fn parse_install_date(s: &str) -> Option<i64> {
@@ -90,11 +97,12 @@ fn read_key(root: &Key, base: &str, tag: &str, sub: &str) -> Option<Installed> {
 pub fn list() -> Vec<Installed> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
-    for (root, base, tag) in sources() {
+    for (base, tag) in SOURCES {
+        let Some(root) = root_of(tag) else { continue };
         let Ok(key) = root.open(base) else { continue };
         let Ok(subs) = key.keys() else { continue };
         for sub in subs {
-            if let Some(app) = read_key(root, base, tag, &sub) {
+            if let Some(app) = read_key(&root, base, tag, &sub) {
                 // Cùng tên + phiên bản xuất hiện ở 2 view registry => giữ một.
                 if seen.insert((app.name.to_lowercase(), app.version.clone())) {
                     out.push(app);
@@ -106,13 +114,14 @@ pub fn list() -> Vec<Installed> {
 }
 
 /// Vị trí key Uninstall của app `id`: (gốc, đường dẫn con dưới gốc, tên đầy đủ cho reg.exe).
-pub fn registry_location(id: &str) -> Option<(&'static Key, String, String)> {
+pub fn registry_location(id: &str) -> Option<(Key, String, String)> {
     let (tag, sub) = id.split_once('\\')?;
     if sub.is_empty() || sub.contains('\\') {
         return None;
     }
-    let (root, base, tag) = sources().into_iter().find(|(_, _, t)| *t == tag)?;
-    let hive = if tag == "HKCU" { "HKCU" } else { "HKLM" };
+    let (base, tag) = SOURCES.into_iter().find(|(_, t)| *t == tag)?;
+    let root = root_of(tag)?;
+    let hive = if tag == "HKCU" { crate::user::hkcu_reg_root() } else { "HKLM".to_owned() };
     let path = format!(r"{base}\{sub}");
     Some((root, path.clone(), format!(r"{hive}\{path}")))
 }
@@ -123,8 +132,8 @@ pub fn find(id: &str) -> Option<Installed> {
     if sub.is_empty() || sub.contains('\\') {
         return None;
     }
-    let (root, base, tag) = sources().into_iter().find(|(_, _, t)| *t == tag)?;
-    read_key(root, base, tag, sub)
+    let (base, tag) = SOURCES.into_iter().find(|(_, t)| *t == tag)?;
+    read_key(&root_of(tag)?, base, tag, sub)
 }
 
 #[cfg(test)]

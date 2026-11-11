@@ -184,6 +184,51 @@ pub fn autostart_allowed() -> Result<PathBuf, String> {
     }
 }
 
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
+}
+
+/// XML task: chạy `exe --tray` khi user `sid` đăng nhập, dưới chính user đó, chỉ khi họ đang
+/// đăng nhập (InteractiveToken), quyền cao nhất mà user đó có.
+fn task_xml(sid: &str, exe: &Path) -> String {
+    let sid = xml_escape(sid);
+    let exe = xml_escape(&exe.display().to_string());
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec><Command>{exe}</Command><Arguments>{TRAY_ARG}</Arguments></Exec>
+  </Actions>
+</Task>
+"#
+    )
+}
+
+fn create_task_for_user(sid: &str, exe: &Path) -> AppResult<std::process::Output> {
+    let file = std::env::temp_dir().join(format!("pcm-autostart-{}.xml", std::process::id()));
+    // schtasks đọc XML UTF-16 LE có BOM.
+    let mut bytes = vec![0xFF, 0xFE];
+    bytes.extend(task_xml(sid, exe).encode_utf16().flat_map(u16::to_le_bytes));
+    std::fs::write(&file, bytes)?;
+    let path = file.display().to_string();
+    let out = run_schtasks(&["/Create", "/TN", TASK_NAME, "/XML", &path, "/F"]);
+    let _ = std::fs::remove_file(&file);
+    out
+}
+
 pub fn set_autostart(store: &Store, enabled: bool) -> AppResult<bool> {
     // Tạo / xoá task "chạy với quyền cao nhất" đều cần quyền Administrator.
     if !crate::sys::token::is_elevated().unwrap_or(false) {
@@ -199,8 +244,15 @@ pub fn set_autostart(store: &Store, enabled: bool) -> AppResult<bool> {
         };
         // Dùng đường dẫn thật (không còn tiền tố \\?\) cho Task Scheduler.
         let exe = PathBuf::from(norm_display(&exe));
-        let tr = format!("\"{}\" {TRAY_ARG}", exe.display());
-        run_schtasks(&["/Create", "/TN", TASK_NAME, "/TR", &tr, "/SC", "ONLOGON", "/RL", "HIGHEST", "/IT", "/F"])
+        match crate::user::other_sid() {
+            // Nâng quyền bằng tài khoản admin khác: task phải chạy khi USER ĐANG ĐĂNG NHẬP đăng
+            // nhập (không phải tài khoản admin). InteractiveToken => không cần mật khẩu của họ.
+            Some(sid) => create_task_for_user(sid, &exe),
+            None => {
+                let tr = format!("\"{}\" {TRAY_ARG}", exe.display());
+                run_schtasks(&["/Create", "/TN", TASK_NAME, "/TR", &tr, "/SC", "ONLOGON", "/RL", "HIGHEST", "/IT", "/F"])
+            }
+        }
     } else {
         run_schtasks(&["/Delete", "/TN", TASK_NAME, "/F"])
     };
@@ -217,6 +269,15 @@ pub fn set_autostart(store: &Store, enabled: bool) -> AppResult<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn task_xml_targets_user_and_escapes_path() {
+        let xml = task_xml("S-1-5-21-9", Path::new(r"C:\Program Files\A&B <x>\pc-manager.exe"));
+        assert_eq!(xml.matches("<UserId>S-1-5-21-9</UserId>").count(), 2, "trigger và principal đều là user đó");
+        assert!(xml.contains("<LogonType>InteractiveToken</LogonType>"), "không cần mật khẩu");
+        assert!(xml.contains(r"<Command>C:\Program Files\A&amp;B &lt;x&gt;\pc-manager.exe</Command>"));
+        assert!(xml.contains(&format!("<Arguments>{TRAY_ARG}</Arguments>")));
+    }
 
     #[test]
     fn autostart_only_from_program_files() {

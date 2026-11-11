@@ -129,8 +129,10 @@ pub struct CleanerManager {
     env: fn(&str) -> Option<String>,
 }
 
+/// Biến môi trường của user đang đăng nhập (`%TEMP%`, `%LOCALAPPDATA%`…), kể cả khi app được
+/// nâng quyền bằng tài khoản admin khác.
 fn real_env(k: &str) -> Option<String> {
-    std::env::var(k).ok()
+    crate::user::env(k)
 }
 
 impl CleanerManager {
@@ -303,10 +305,10 @@ impl CleanerManager {
 
     fn scan_rule(&self, rule: &Rule, now: SystemTime, c: &Counters) -> (RuleStatus, Option<Prepared>) {
         match rule.kind {
-            RuleKind::RecycleBin => match sys::recycle::query() {
+            RuleKind::RecycleBin => match crate::user::recycle::query() {
                 Ok(info) if info.items > 0 => (RuleStatus::Ready, Some(Prepared::Recycle(info))),
                 Ok(_) => (RuleStatus::Empty, None),
-                Err(e) => (RuleStatus::Error { message: e.to_string() }, None),
+                Err(e) => (RuleStatus::Error { message: e }, None),
             },
             RuleKind::Files => {
                 let roots: Vec<_> = rule.paths.iter().flat_map(|p| engine::expand_roots(p, &self.env)).collect();
@@ -366,7 +368,7 @@ impl CleanerManager {
                             rc.stats.deleted_files = info.items;
                             rc.stats.freed_bytes = info.bytes;
                         } else {
-                            match sys::recycle::empty() {
+                            match crate::user::recycle::empty() {
                                 Ok(()) => {
                                     rc.stats.deleted_files = info.items;
                                     rc.stats.freed_bytes = info.bytes;

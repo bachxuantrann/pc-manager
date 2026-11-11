@@ -11,6 +11,7 @@ mod ntdll;
 pub mod process;
 pub mod recycle;
 pub mod service;
+pub mod session;
 pub mod shell;
 pub mod signature;
 pub mod tasks;

@@ -528,7 +528,7 @@ fn recycle_one(guard: &DiskGuard, f: &Stored, all: &HashMap<u32, Stored>, id: u3
             return Err("không còn bản nào khác trong nhóm — giữ lại file này".into());
         }
     }
-    sys::recycle::move_to_recycle_bin(&f.path)?;
+    crate::user::recycle::move_to_recycle_bin(&f.path)?;
     if f.path.exists() {
         return Err("chưa chuyển được (file đang mở?)".into());
     }

@@ -285,6 +285,15 @@ pub fn uninstall(store: &Store, id: &str) -> AppResult<Started> {
         if app.no_remove {
             return Err(AppError::Forbidden(format!("{} không cho phép gỡ cài đặt", app.name)));
         }
+        // App cài riêng cho user (HKCU): trình gỡ chạy dưới tài khoản admin sẽ tìm trong profile
+        // của admin và gỡ hỏng. Người dùng tự gỡ được mà không cần quyền admin.
+        if app.id.starts_with("HKCU\\") && crate::user::is_other_user() {
+            return Err(AppError::Forbidden(format!(
+                "{} được cài riêng cho tài khoản {} — hãy mở PC Manager ở chế độ thường (không nâng quyền) để gỡ",
+                app.name,
+                crate::user::other_account().unwrap_or("của bạn")
+            )));
+        }
         let raw = app.uninstall.as_deref().ok_or_else(|| AppError::NotFound("không có lệnh gỡ cài đặt".into()))?;
         let sys32 = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
         let cmd = parse_uninstall(raw, &sys32).ok_or_else(|| AppError::InvalidInput(format!("không hiểu lệnh gỡ: {raw}")))?;
