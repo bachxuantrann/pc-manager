@@ -118,3 +118,12 @@ pub async fn jobs_ack(state: State<'_, AppState>, kind: String) -> AppResult<()>
     state.jobs.ack(&kind);
     Ok(())
 }
+
+/// Cấu hình máy: Windows, CPU, GPU, mainboard, BIOS, RAM, ổ đĩa. Đọc một lần (vài chục ms),
+/// không chạy nền, không cần quyền admin.
+#[tauri::command]
+pub async fn system_info() -> AppResult<crate::hwinfo::SystemInfo> {
+    tauri::async_runtime::spawn_blocking(crate::hwinfo::collect)
+        .await
+        .map_err(|e| crate::error::task_failed("đọc cấu hình máy", e))
+}

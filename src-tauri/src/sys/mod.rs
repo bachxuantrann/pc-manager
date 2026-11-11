@@ -4,6 +4,7 @@
 
 pub mod com;
 pub mod disk;
+pub mod firmware;
 pub mod handle;
 pub mod instance;
 pub mod launch;
@@ -15,6 +16,7 @@ pub mod service;
 pub mod session;
 pub mod shell;
 pub mod signature;
+pub mod storage;
 pub mod tasks;
 pub mod webview;
 pub mod token;

@@ -415,6 +415,73 @@ export interface GeneralSettings {
   elevated: boolean;
 }
 
+// ---- Cấu hình máy (hwinfo) ----
+
+export interface WindowsInfo {
+  product: string;
+  displayVersion: string | null;
+  build: string | null;
+  installDateMs: number | null;
+  uptimeSecs: number;
+  architecture: string;
+}
+export interface CpuInfo {
+  name: string | null;
+  socket: string | null;
+  cores: number | null;
+  threads: number | null;
+  baseMhz: number | null;
+  maxMhz: number | null;
+}
+export interface GpuInfo {
+  name: string;
+  vendor: string | null;
+  vramBytes: number | null;
+  driverVersion: string | null;
+  driverDate: string | null;
+}
+export interface BoardInfo {
+  systemManufacturer: string | null;
+  systemProduct: string | null;
+  manufacturer: string | null;
+  product: string | null;
+  version: string | null;
+}
+export interface BiosInfo {
+  vendor: string | null;
+  version: string | null;
+  releaseDate: string | null;
+}
+export interface MemorySlot {
+  locator: string | null;
+  bank: string | null;
+  /** null = khe trống. */
+  sizeMb: number | null;
+  kind: string | null;
+  speedMts: number | null;
+  configuredMts: number | null;
+  manufacturer: string | null;
+  partNumber: string | null;
+  formFactor: string | null;
+}
+export interface DiskInfo {
+  index: number;
+  model: string;
+  sizeBytes: number | null;
+  bus: string | null;
+  media: string | null;
+  firmware: string | null;
+}
+export interface SystemInfo {
+  windows: WindowsInfo;
+  cpu: CpuInfo;
+  gpus: GpuInfo[];
+  board: BoardInfo;
+  bios: BiosInfo;
+  memory: { totalBytes: number; slotsTotal: number | null; slots: MemorySlot[] };
+  disks: DiskInfo[];
+}
+
 // ---- Tác vụ dài: backend ghi lại để cửa sổ mở lại nối lại được (xem src-tauri/src/jobs.rs) ----
 
 export type JobKind = "cleaner.scan" | "cleaner.clean" | "winsxs.analyze" | "winsxs.clean" | "winold.clean" | "disk.large" | "disk.dups";
@@ -528,6 +595,9 @@ export const api = {
     invoke<AutoClean>("settings_set_auto_clean", { enabled, intervalDays, ruleIds }),
   settingsSetWhitelist: (paths: string[]) => invoke<string[]>("settings_set_whitelist", { paths }),
   settingsSetAutostart: (enabled: boolean) => invoke<boolean>("settings_set_autostart", { enabled }),
+
+  /** Đọc một lần (vài chục ms), không chạy nền. */
+  systemInfo: () => invoke<SystemInfo>("system_info"),
 
   jobsSnapshot: () => invoke<Job[]>("jobs_snapshot"),
   jobsAck: (kind: JobKind) => invoke<void>("jobs_ack", { kind }),

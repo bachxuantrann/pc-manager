@@ -226,6 +226,27 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   settings_get: () => settings,
   recent_actions: () => actions,
   system_windows_old_info: () => ({ path: "C:\\Windows.old", exists: false, bytes: null }),
+  system_info: () => ({
+    windows: { product: "Windows 11 Pro", displayVersion: "24H2", build: "26100.4061", installDateMs: now - 400 * DAY, uptimeSecs: 3 * 86400 + 5 * 3600, architecture: "x64" },
+    cpu: { name: "AMD Ryzen 7 7800X3D 8-Core Processor", socket: "AM5", cores: 8, threads: 16, baseMhz: 4200, maxMhz: 5050 },
+    gpus: [{ name: "NVIDIA GeForce RTX 4070", vendor: "NVIDIA", vramBytes: 12 * GB, driverVersion: "32.0.15.7270", driverDate: "5-20-2025" }],
+    board: { systemManufacturer: null, systemProduct: null, manufacturer: "ASUSTeK COMPUTER INC.", product: "TUF GAMING B650-PLUS WIFI", version: "Rev 1.xx" },
+    bios: { vendor: "American Megatrends Inc.", version: "3222", releaseDate: "03/14/2025" },
+    memory: {
+      totalBytes: 32 * GB,
+      slotsTotal: 4,
+      slots: [
+        { locator: "DIMM_A1", bank: "BANK 0", sizeMb: null, kind: null, speedMts: null, configuredMts: null, manufacturer: null, partNumber: null, formFactor: null },
+        { locator: "DIMM_A2", bank: "BANK 1", sizeMb: 16384, kind: "DDR5", speedMts: 6000, configuredMts: 6000, manufacturer: "Kingston", partNumber: "KF560C30-16", formFactor: "DIMM" },
+        { locator: "DIMM_B1", bank: "BANK 2", sizeMb: null, kind: null, speedMts: null, configuredMts: null, manufacturer: null, partNumber: null, formFactor: null },
+        { locator: "DIMM_B2", bank: "BANK 3", sizeMb: 16384, kind: "DDR5", speedMts: 6000, configuredMts: 4800, manufacturer: "Kingston", partNumber: "KF560C30-16", formFactor: "DIMM" },
+      ],
+    },
+    disks: [
+      { index: 0, model: "Samsung SSD 990 PRO 2TB", sizeBytes: 2_000_398_934_016, bus: "NVMe", media: "SSD", firmware: "4B2QJXD7" },
+      { index: 1, model: "WDC WD20EZBX-00AYRA0", sizeBytes: 2_000_398_934_016, bus: "SATA", media: "HDD", firmware: "01.01A01" },
+    ],
+  }),
   "plugin:event|listen": () => 1,
   "plugin:event|unlisten": () => null,
 };

@@ -85,3 +85,10 @@ export const IconShield = (p: { className?: string }) => (
     <path d="M12 3 4.5 6v5.5c0 4.5 3.2 8.2 7.5 9.5 4.3-1.3 7.5-5 7.5-9.5V6Z" />
   </Icon>
 );
+
+export const IconMonitor = (p: { className?: string }) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="12" rx="2" />
+    <path d="M8 20h8M12 16v4" />
+  </Icon>
+);

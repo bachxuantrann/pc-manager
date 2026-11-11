@@ -7,6 +7,7 @@ import Sidebar, { type PageId } from "./components/Sidebar";
 import { MemoryFeedProvider } from "./hooks/useMemoryFeed";
 import { ElevationProvider } from "./components/Elevation";
 import Dashboard from "./pages/Dashboard";
+import SystemInfoPage from "./pages/SystemInfo";
 import Memory from "./pages/Memory";
 import Cleaner from "./pages/Cleaner";
 import Processes from "./pages/Processes";
@@ -17,6 +18,7 @@ import Settings from "./pages/Settings";
 
 const PAGES: Record<PageId, () => JSX.Element> = {
   dashboard: Dashboard,
+  system: SystemInfoPage,
   memory: Memory,
   cleaner: Cleaner,
   processes: Processes,

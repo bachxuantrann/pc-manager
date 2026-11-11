@@ -3,6 +3,21 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.1.0] - chưa phát hành
+
+### Mới
+- **Giao diện tối mới** (mặc định): nền tối có ánh xanh, card bo góc, thanh bên có biểu tượng, đồng
+  hồ RAM dạng vòng cung ở Tổng quan. Đổi Tối / Sáng / Theo Windows ở Cài đặt → Giao diện. Không
+  dùng hiệu ứng kính mờ hay animation nên không làm app nặng thêm.
+- **Trang "Cấu hình máy"**: Windows (bản, build, ngày cài, thời gian chạy liên tục), CPU (nhân/luồng,
+  xung), card đồ hoạ (VRAM, driver), mainboard & BIOS, RAM (số khe đã cắm/tổng, từng thanh: dung
+  lượng, DDR4/DDR5, tốc độ thực tế và tốc độ thanh hỗ trợ, hãng, mã), ổ đĩa (model, dung lượng,
+  NVMe/SATA/USB, SSD/HDD). Nút **Sao chép cấu hình** để dán gửi người khác. Không cần quyền admin,
+  không thu thập số serial hay tên máy.
+
+### Thay đổi
+- Trang Cài đặt sắp lại: card cùng hàng cao bằng nhau.
+
 ## [1.0.4] - 2026-11-11
 
 ### Mới

@@ -1,10 +1,11 @@
 import type { ComponentType } from "react";
 import { Spinner } from "./Button";
-import { IconActivity, IconChip, IconDisk, IconGrid, IconHome, IconPower, IconSettings, IconShield, IconSparkle } from "./Icons";
+import { IconActivity, IconChip, IconDisk, IconGrid, IconHome, IconMonitor, IconPower, IconSettings, IconShield, IconSparkle } from "./Icons";
 import { ElevateButton, useElevation } from "./Elevation";
 
 export type PageId =
   | "dashboard"
+  | "system"
   | "memory"
   | "cleaner"
   | "processes"
@@ -15,6 +16,7 @@ export type PageId =
 
 const ITEMS: { id: PageId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: "dashboard", label: "Tổng quan", icon: IconHome },
+  { id: "system", label: "Cấu hình máy", icon: IconMonitor },
   { id: "memory", label: "Bộ nhớ", icon: IconChip },
   { id: "cleaner", label: "Dọn rác", icon: IconSparkle },
   { id: "processes", label: "Tiến trình", icon: IconActivity },
