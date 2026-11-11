@@ -1,5 +1,8 @@
 # Prompt theo từng giai đoạn cho Claude Code
 
+> **Tài liệu lịch sử** (các prompt dùng để dựng v1.0). Một số chi tiết đã lỗi thời — vd. manifest nay là
+> `asInvoker`, không phải `requireAdministrator`; app có 10 trang. Khi làm việc luôn theo `CLAUDE.md`.
+
 Chạy lần lượt, mỗi giai đoạn xong thì build + test thử trên máy rồi commit. Đừng gộp nhiều giai đoạn vào một prompt.
 
 ## 0. Khởi tạo

@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PC Manager — Rà soát dự án 2026-11-11</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --line: #e3e6eb; --text: #151a22; --mute: #5d6675;
+    --accent: #2563eb; --ok: #15803d; --okbg: #e7f6ec; --hi: #b91c1c; --hibg: #fde8e8;
+    --mid: #b45309; --midbg: #fdf1dc; --lo: #475569; --lobg: #e9edf2; --code: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0e13; --card: #131820; --line: #232b37; --text: #e6e9ef; --mute: #98a2b3;
+      --accent: #5b9bff; --ok: #4ade80; --okbg: #12301f; --hi: #fca5a5; --hibg: #3b1717;
+      --mid: #fbbf24; --midbg: #3a2a0c; --lo: #b6c0cf; --lobg: #1e2632; --code: #1b222d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 16px 120px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 36px 0 12px; }
+  .sub { color: var(--mute); margin: 0 0 20px; }
+  code { background: var(--code); border-radius: 4px; padding: 1px 5px; font: 12.5px/1.4 Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--mute); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+  .card h3 { margin: 0; font-size: 15.5px; font-weight: 600; }
+  .head { display: flex; gap: 10px; align-items: flex-start; }
+  .head input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+  .tag { font-size: 12px; border-radius: 999px; padding: 1px 9px; background: var(--lobg); color: var(--lo); white-space: nowrap; }
+  .tag.hi { background: var(--hibg); color: var(--hi); } .tag.mid { background: var(--midbg); color: var(--mid); }
+  .tag.ok { background: var(--okbg); color: var(--ok); } .tag.id { font-family: Consolas, monospace; }
+  .body { margin: 10px 0 0 27px; }
+  .body p { margin: 6px 0; }
+  .lbl { color: var(--mute); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin-top: 10px; }
+  .files { margin: 4px 0 0; padding: 0; list-style: none; }
+  .files li { margin: 2px 0; }
+  .fixed .body { margin-left: 0; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on, button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sticky { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px 16px; }
+  .sticky .in { max-width: 1080px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  .phase { border-left: 3px solid var(--accent); padding-left: 14px; margin: 0 0 18px; }
+  .phase h3 { margin: 0 0 2px; font-size: 16px; }
+  .phase p { margin: 2px 0 6px; color: var(--mute); }
+  .phase ol { margin: 4px 0; padding-left: 20px; }
+  .note { background: var(--midbg); color: var(--mid); border-radius: 10px; padding: 10px 14px; margin: 12px 0; }
+  pre { background: var(--code); border-radius: 10px; padding: 12px; overflow-x: auto; font: 12.5px/1.5 Consolas, monospace; white-space: pre-wrap; }
+  details summary { cursor: pointer; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PC Manager — Rà soát toàn dự án</h1>
+  <p class="sub">Ngày 2026-11-11 · phiên bản 1.1.2 (commit <code>03bc0f1</code>) · đã đọc toàn bộ mã Rust (<code>src-tauri/src</code>), giao diện (<code>src</code>), <code>rules/cleaner.toml</code>, cấu hình build/CI, <code>CLAUDE.md</code>, tài liệu và skills.</p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="note">
+    <b>Trạng thái kiểm tra sau khi sửa:</b> <span id="verify"></span>
+    Chưa commit gì — mọi thay đổi đang nằm trong working tree để bạn xem bằng <code>git diff</code>.
+  </div>
+
+  <h2>1. Đã sửa ngay (chắc chắn, phạm vi nhỏ)</h2>
+  <div id="fixed"></div>
+
+  <h2>2. Đề xuất cần bạn duyệt</h2>
+  <p class="sub">Tick mục muốn làm rồi bấm “Sao chép plan đã chọn” ở thanh dưới cùng để đưa cho agent. Mức ưu tiên là đánh giá của tôi.</p>
+  <div class="bar" id="filters"></div>
+  <div id="items"></div>
+
+  <h2>3. Plan triển khai cho agent</h2>
+  <p class="sub">Thứ tự đề xuất: mỗi giai đoạn là một commit riêng, làm xong chạy đủ bộ kiểm tra của <code>CLAUDE.md</code>.</p>
+  <div id="phases"></div>
+  <details>
+    <summary>Quy tắc chung agent phải giữ ở mọi giai đoạn</summary>
+    <ol>
+      <li>Đọc <code>CLAUDE.md</code> trước; mục “AN TOÀN” không được nới lỏng. <code>unsafe</code> chỉ trong <code>sys/</code>, không <code>unwrap/expect</code> ngoài test.</li>
+      <li>Không thêm thư viện mới, không đổi stack, không commit/push/tag khi chưa được yêu cầu.</li>
+      <li>Trước khi báo xong: <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>, <code>npm run build</code> đều qua.</li>
+      <li>Sửa giao diện: chạy <code>scripts/layout-check.js</code> ở 860x560, 1100x720, 1366x768, 1920x1080, cả hai theme — <code>issues</code> rỗng, rồi chụp ảnh xem bằng mắt.</li>
+      <li>Thay đổi có thể ảnh hưởng RAM/CPU: đo lại theo mục “Hiệu năng — mốc đo &amp; ngân sách”.</li>
+      <li>Mỗi thay đổi người dùng thấy được: thêm dòng vào <code>CHANGELOG.md</code> (mục phiên bản kế tiếp).</li>
+    </ol>
+  </details>
+</div>
+
+<div class="sticky"><div class="in">
+  <span id="count"></span>
+  <span>
+    <button id="all">Chọn tất cả đang hiện</button>
+    <button id="none">Bỏ chọn</button>
+    <button class="primary" id="copy">Sao chép plan đã chọn</button>
+  </span>
+</div></div>
+
+<script>
+const VERIFY = "clippy sạch, 188 test qua (7 test cần quyền admin bị bỏ qua như thường lệ), npm run build qua.";
+
+const FIXED = [
+  ["Thuộc tính `mobile_entry_point` gắn nhầm hàm", "`#[cfg_attr(mobile, tauri::mobile_entry_point)]` bị lặp và gắn vào `spawn_show_listener` (không phải `run`). Đã xoá bản thừa và chú thích trỏ tới PROMPTS.md đã lỗi thời.", ["src-tauri/src/lib.rs"]],
+  ["Dọn tự động bị bỏ cả kỳ khi đang quét/dọn tay", "Mốc `last_run_ms` được ghi TRƯỚC khi dọn; nếu lúc đó người dùng đang quét (lỗi `Busy`) thì phải chờ thêm 1/7/30 ngày. Giờ gặp `Busy` sẽ trả lại mốc cũ và thử lại sau 30 phút.", ["src-tauri/src/lib.rs"]],
+  ["Liệt kê tiến trình chép thừa cả buffer", "`enumerate()` chép 0,5–1 MB từng byte qua `flat_map` mỗi lần (2 giây/lần ở trang Tiến trình, 60 giây/lần ở sampler nền). Đổi sang xem buffer tại chỗ (có `// SAFETY:`).", ["src-tauri/src/sys/process.rs"]],
+  ["Glob cấp phát bộ nhớ cho từng file dù mẫu là `*`", "Hầu hết rule dùng `include = [\"*\"]`; mỗi file vẫn bị `to_lowercase` + tạo 2 `Vec<char>`. Thêm lối tắt cho `*`.", ["src-tauri/src/cleaner/glob.rs"]],
+  ["Xoá Windows.old xong lại đo cả cây thư mục", "Bước kiểm tra “còn Windows.old không” gọi `windows_old_info()` — duyệt lại hàng chục GB chỉ để lấy một giá trị đúng/sai. Tách `windows_old_exists()`.", ["src-tauri/src/cleaner/system.rs"]],
+  ["Khoá không theo quy ước `LockExt`", "`disk/mod.rs` và `usage/leftovers.rs` tự viết `.lock().unwrap_or_else(|e| e.into_inner())` (7 chỗ) thay vì `lock_recover()` như `CLAUDE.md` quy định.", ["src-tauri/src/disk/mod.rs", "src-tauri/src/usage/leftovers.rs"]],
+  ["Hàm chết `PublisherCache::get_blocking`", "Không còn nơi nào gọi (chú thích “dùng ở giai đoạn 3” đã cũ). Đã xoá.", ["src-tauri/src/process/publisher.rs"]],
+  ["Thông báo lỗi sai thao tác khi gỡ app", "Tác vụ mở trình gỡ panic thì báo “Lỗi nội bộ khi đọc danh sách ứng dụng”. Đổi thành “mở trình gỡ cài đặt”.", ["src-tauri/src/commands/apps.rs"]],
+  ["Module test nằm giữa file", "`commands/mod.rs` có `mod tests` chen trước 4 command. Đưa xuống cuối file.", ["src-tauri/src/commands/mod.rs"]],
+  ["“Mở vị trí file” chạy `explorer.exe` theo tên trần", "Khi app có quyền Administrator, để PATH/thư mục hiện tại quyết định chương trình chạy là không nên (các chỗ khác đều dùng đường dẫn tuyệt đối). Đổi sang `%SystemRoot%\\explorer.exe`.", ["src-tauri/src/process/mod.rs"]],
+  ["`Card` tự viết lại chuỗi class của `SURFACE`", "Trái quy ước “class dùng chung ở `ui.ts`”. `Card` nay dùng `SURFACE` (class sinh ra y hệt, không đổi hình ảnh).", ["src/components/Card.tsx"]],
+  ["`CLAUDE.md` lỗi thời", "Còn ghi `sysinfo` (không có trong dự án), thiếu `windows-registry`/`webview2-com`/`toml`; sơ đồ cấu trúc thiếu 3 trang (Diagnosis, SystemInfo, Disk) và các module `user/`, `diagnosis/`, `hwinfo/`, `jobs.rs`, `tray.rs`… Đã cập nhật.", ["CLAUDE.md"]],
+  ["`PROMPTS.md` mâu thuẫn `CLAUDE.md`", "Vẫn yêu cầu manifest `requireAdministrator` và “7 trang”. Thêm ghi chú đầu file: tài liệu lịch sử, luôn theo `CLAUDE.md`.", ["PROMPTS.md"]],
+];
+
+const GROUPS = { sec: "An toàn / bảo mật", exp: "Chính xác chuyên môn", perf: "Hiệu năng", ux: "Giao diện & trải nghiệm", build: "Build / mã nguồn", doc: "Tài liệu, skills, token" };
+const PRI = { hi: "Cao", mid: "Trung bình", lo: "Thấp" };
+
+const ITEMS = [
+  { id: "S1", g: "sec", p: "hi", ph: 1, e: "S",
+    t: "Trình gỡ của app cài riêng cho người dùng (HKCU) chạy bằng quyền Administrator",
+    why: "Khi PC Manager đang nâng quyền bằng CHÍNH tài khoản đang đăng nhập, `UninstallString` đọc từ HKCU được chạy thẳng với token admin. HKCU ghi được bởi mọi chương trình quyền thường, nên đây là đường leo thang đặc quyền (phần mềm xấu sửa `UninstallString`, chờ người dùng bấm Gỡ). Hiện chỉ hạ quyền khi nâng quyền bằng tài khoản KHÁC.",
+    ev: ["src-tauri/src/usage/mod.rs:361"],
+    fix: "App `HKCU\\…` và tiến trình đang elevated ⇒ luôn chạy qua `sys::launch::spawn_as_shell_user` (token của Explorer), không phụ thuộc `is_other_user()`. Windows Settings cũng chạy trình gỡ per-user ở quyền thường.",
+    ok: "Test: id `HKCU\\…` + elevated đi nhánh `spawn_as_shell_user`. Thử tay: gỡ một app per-user khi PC Manager đang admin, trình gỡ không có khiên UAC và vẫn gỡ được." },
+  { id: "S2", g: "sec", p: "mid", ph: 1, e: "S",
+    t: "Dọn tự động ghi đè bản xem trước của trang Dọn rác",
+    why: "`auto_clean` gọi `scan()` (lưu kết quả vào `last`) rồi `clean()`. Nếu người dùng đang xem kết quả quét, bản đó bị thay — bấm Dọn sẽ báo “kết quả quét đã cũ”.",
+    ev: ["src-tauri/src/cleaner/mod.rs:179"],
+    fix: "Cho `auto_clean` quét và dọn trên dữ liệu riêng (tách hàm nội bộ nhận `StoredScan` cục bộ), không đụng `self.last`.",
+    ok: "Test: có kết quả quét A, chạy `auto_clean`, sau đó `clean(A.scan_id)` vẫn chạy được." },
+  { id: "S3", g: "sec", p: "lo", ph: 6, e: "S",
+    t: "Cơ sở dữ liệu lớn dần không giới hạn",
+    why: "`action_log` không bao giờ được cắt (auto Smart Boost, mỗi file vào Thùng rác đều ghi một dòng). `app_usage` giữ mọi đường dẫn exe từng thấy, kể cả trình cài tên ngẫu nhiên trong Temp.",
+    ev: ["src-tauri/src/store/mod.rs:13", "src-tauri/src/store/mod.rs:110"],
+    fix: "Khi mở DB: giữ N dòng nhật ký mới nhất (đề xuất 5.000) và xoá `app_usage` có `last_seen` cũ hơn 1 năm. Cần bạn quyết định con số vì đây là chính sách lưu giữ.",
+    ok: "Test với DB trong RAM: chèn N+100 dòng, mở lại còn đúng N." },
+
+  { id: "E1", g: "exp", p: "hi", ph: 1, e: "M",
+    t: "Smart Boost / tự động dùng “Boost sâu” đúng lúc máy đang thiếu RAM",
+    why: "Standby là cache Windows ĐÃ tính vào RAM khả dụng và nhường ngay khi app cần (chính `memory/calc.rs` đã ghi rõ). Xoá toàn bộ standby khi RAM thấp không tăng RAM khả dụng, chỉ làm mất cache nên máy đọc đĩa nhiều hơn. Lợi ích thật chỉ đến từ flush modified. Câu chữ giao diện (“xoá toàn bộ cache để ứng dụng có RAM ngay”) và Chẩn đoán (“Boost giải phóng cache”) vì thế chưa đúng.",
+    ev: ["src-tauri/src/memory/mod.rs:220", "src/components/BoostPanel.tsx:183", "src-tauri/src/diagnosis/rules.rs:127"],
+    fix: "Smart Boost và auto dùng `BoostMode::Light` (flush modified + standby ưu tiên thấp). Sửa mô tả thẻ Smart Boost; trong Chẩn đoán khi RAM < 10% đặt “đóng bớt app nặng (mở Tiến trình)” làm hành động chính, Boost là phụ.",
+    ok: "Test `smart_boost` trả báo cáo `mode = light`. Đo trên máy thật trước/sau: RAM khả dụng tăng tương đương, standby còn lại lớn hơn." },
+  { id: "E2", g: "exp", p: "mid", ph: 5, e: "S",
+    t: "Gợi ý “Bật XMP/EXPO” hiện cả trên laptop",
+    why: "Quy tắc chỉ so `configured_mts < speed_mts`. Laptop (SODIMM/RAM hàn) hầu như không có XMP; nhiều firmware ghi `Speed` là mức tối đa của khe chứ không phải của thanh RAM ⇒ gợi ý sai.",
+    ev: ["src-tauri/src/diagnosis/mod.rs:133", "src-tauri/src/diagnosis/rules.rs:278"],
+    fix: "Chỉ báo khi `form_factor == \"DIMM\"` (máy bàn); tuỳ chọn đọc thêm SMBIOS type 3 (chassis) để loại laptop/mini-PC.",
+    ok: "Test `rules`: khe SODIMM chạy chậm ⇒ không có finding `ram-xmp`; khe DIMM ⇒ có." },
+  { id: "E3", g: "exp", p: "mid", ph: 5, e: "M",
+    t: "Rule dọn cache trình duyệt còn thiếu",
+    why: "Chrome/Edge mới chỉ dọn `Cache`, `Code Cache`, `GPUCache` trong từng profile. Chưa có `Service Worker\\CacheStorage`, `ShaderCache`/`GrShaderCache` ở `User Data`, và các trình duyệt Chromium khác (Brave, Opera, Vivaldi, Cốc Cốc). Firefox thiếu `startupCache`.",
+    ev: ["rules/cleaner.toml:142"],
+    fix: "Thêm path cho rule hiện có và rule mới cho từng trình duyệt (kèm `skip_if_running`). KHÔNG đụng `Service Worker\\Database`, `IndexedDB`, `Local Storage` (dữ liệu trang web).",
+    ok: "Test `embedded_rules_are_valid` qua; thử dry-run trên máy có các trình duyệt đó, kiểm tra danh sách file chỉ nằm trong thư mục cache." },
+  { id: "E4", g: "exp", p: "lo", ph: 5, e: "M",
+    t: "Trang Khởi động thiếu app Store và tên dịch vụ dạng tài nguyên",
+    why: "Task Manager hiện cả startup task của app UWP/MSIX; PC Manager thì không. Dịch vụ có `DisplayName` dạng `@dll,-123` bị thay bằng tên key thay vì tên hiển thị. `.Lnk` (hoa thường lẫn lộn) không bị cắt đuôi.",
+    ev: ["src-tauri/src/startup/mod.rs:316"],
+    fix: "Đọc startup task của gói (registry `Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\*\\*StartupId`, chỉ đọc ở v1); giải tên bằng `RegLoadMUIStringW` trong `sys/`; cắt đuôi `.lnk` không phân biệt hoa thường.",
+    ok: "Số app ở tab “Ứng dụng” khớp tab Startup của Task Manager trên máy có app Store tự khởi động." },
+  { id: "E5", g: "exp", p: "lo", ph: 5, e: "L",
+    t: "Trang Ứng dụng không liệt kê app Store (MSIX)",
+    why: "Chỉ đọc key `Uninstall`. App cài từ Microsoft Store (thường chiếm nhiều dung lượng) không xuất hiện nên “app không dùng” thiếu sót.",
+    ev: ["src-tauri/src/usage/installed.rs:97"],
+    fix: "Tuỳ chọn: liệt kê gói của người dùng qua `PackageManager` (WinRT) — chỉ xem + mở Settings để gỡ. Cần đo RAM vì nạp thêm WinRT; nếu vượt ngân sách thì bỏ.",
+    ok: "Danh sách có thêm app Store, RAM Rust lúc rảnh vẫn ≤ 12 MB." },
+  { id: "E6", g: "exp", p: "lo", ph: 5, e: "S",
+    t: "Mô tả rule “Bản cập nhật Windows đã tải” chưa chính xác",
+    why: "Ghi “File cập nhật đã cài xong”, nhưng `SoftwareDistribution\\Download` cũng chứa bản đã tải mà CHƯA cài; xoá thì Windows tải lại.",
+    ev: ["rules/cleaner.toml:188"],
+    fix: "Sửa mô tả: “File cập nhật đã tải (đã cài hoặc đang chờ). Windows sẽ tải lại bản chưa cài.” Cân nhắc `default_selected = false`.",
+    ok: "Chỉ đổi văn bản; test rule vẫn qua." },
+
+  { id: "P1", g: "perf", p: "mid", ph: 3, e: "M",
+    t: "Số liệu RAM được hỏi 2 giây/lần ở MỌI trang, trang ẩn vẫn vẽ lại",
+    why: "`MemoryFeedProvider` nằm ngoài các trang nên luôn “đang hiển thị”. Ở trang Cài đặt/Ổ đĩa… app vẫn gọi `memory_status` mỗi 2 giây, và Tổng quan + Bộ nhớ (đang ẩn nhưng giữ sống) vẫn render lại biểu đồ. Trái tinh thần “không polling khi không hiển thị”.",
+    ev: ["src/hooks/useMemoryFeed.tsx:55", "src/App.tsx"],
+    fix: "Provider chỉ chạy khi có ít nhất một trang tiêu thụ đang được chọn (đếm đăng ký từ `useMemoryFeed` kết hợp `usePageActive`). Biểu đồ 60 giây chấp nhận khoảng trống khi rời trang (hoặc xoá lịch sử khi quay lại).",
+    ok: "Ở trang Cài đặt: không còn lệnh `memory_status` trong 10 giây (xem bằng DevTools/log). CPU WebView2 khi rảnh ở trang khác giảm." },
+  { id: "P2", g: "perf", p: "mid", ph: 3, e: "M",
+    t: "Bảng Tiến trình vẽ lại toàn bộ 300+ dòng mỗi 2 giây",
+    why: "WebView chạy không GPU; mỗi lần làm mới React dựng lại mọi `<tr>`. Phía Rust mỗi thao tác (kill, trim…) lại `enumerate()` toàn bộ thêm 1–2 lần.",
+    ev: ["src/pages/Processes.tsx:74", "src-tauri/src/process/mod.rs"],
+    fix: "Tách dòng thành component `memo` so sánh theo (cpu, ram, publisher, suspended, selected); giữ thứ tự ổn định. Đo CPU trước/sau bằng trang Tiến trình mở 60 giây.",
+    ok: "CPU của WebView2 ở trang Tiến trình giảm rõ (ghi số đo vào CHANGELOG)." },
+  { id: "P3", g: "perf", p: "lo", ph: 3, e: "S",
+    t: "Sampler ghi lại toàn bộ danh sách exe vào SQLite mỗi 60 giây",
+    why: "Khoảng 150–300 lệnh UPSERT mỗi phút suốt thời gian app chạy nền, trong khi “lần dùng cuối” chỉ cần độ chính xác theo ngày.",
+    ev: ["src-tauri/src/usage/sampler.rs:37"],
+    fix: "Ghi ngay exe MỚI xuất hiện; các exe còn lại làm mới `last_seen` tối đa 15 phút/lần.",
+    ok: "Test sampler: hai lần `tick` liên tiếp, lần hai không ghi dòng nào nếu không có exe mới." },
+  { id: "P4", g: "perf", p: "lo", ph: 3, e: "M",
+    t: "Quét rác kiểm tra danh sách cấm cho từng file",
+    why: "`bans.check` chuẩn hoá đường dẫn 2 lần và lấy khoá whitelist cho MỖI file; thư mục hàng trăm nghìn file tạm tốn đáng kể. Glob cũng hạ chữ thường mẫu ở mỗi lần so.",
+    ev: ["src-tauri/src/cleaner/engine.rs:119", "src-tauri/src/cleaner/glob.rs"],
+    fix: "Kiểm tra cấm theo THƯ MỤC một lần rồi chỉ kiểm tra phần “shallow/exact” cho file; hạ chữ thường mẫu include/exclude một lần khi nạp rule. Bước kiểm tra lại trước khi xoá (`recheck`) giữ nguyên từng file.",
+    ok: "Toàn bộ `cleaner/tests.rs` qua; đo thời gian quét `%TEMP%` có ≥ 50.000 file trước/sau." },
+  { id: "P5", g: "perf", p: "lo", ph: 3, e: "S",
+    t: "Mở trang Cài đặt phải chạy `schtasks.exe`",
+    why: "`autostart_enabled()` sinh một tiến trình (50–150 ms) mỗi lần đọc cài đặt, trong khi `sys/tasks.rs` đã có sẵn kết nối `ITaskService`.",
+    ev: ["src-tauri/src/settings.rs:147"],
+    fix: "Thêm `sys::tasks::task_exists(name)` qua COM; giữ `schtasks` cho việc tạo/xoá.",
+    ok: "`settings_get` không còn sinh tiến trình con." },
+  { id: "P6", g: "ux", p: "mid", ph: 2, e: "L",
+    t: "Một số tác vụ dài chưa có tiến độ / không nối lại được",
+    why: "`CLAUDE.md` yêu cầu tác vụ lâu có % và chạy qua `jobs::run`. Hiện: chuyển tới 5.000 file vào Thùng rác (`disk_recycle`), dọn phần còn sót (`apps_leftovers_clean`), tải danh sách ứng dụng (`apps_list`) chạy ngoài `jobs`; dọn rác chỉ báo tiến độ theo rule, một rule 100.000 file thì thanh đứng yên.",
+    ev: ["src-tauri/src/commands/disk.rs:46", "src-tauri/src/commands/apps.rs:104", "src-tauri/src/commands/apps.rs:16", "src-tauri/src/cleaner/mod.rs:363"],
+    fix: "Thêm kind `disk.recycle`, `apps.leftovers`, `apps.list` (KINDS, `JobKind`, `JOB_PAGE`, `tracked()`, `useJobResume`); `engine::delete` báo tiến độ định kỳ theo số file đã xử lý.",
+    ok: "Đóng cửa sổ giữa lúc đang chuyển file vào Thùng rác rồi mở lại vẫn thấy tiến độ/kết quả; thanh tiến độ Dọn rác chạy đều trong một rule lớn." },
+  { id: "P7", g: "perf", p: "lo", ph: 2, e: "S",
+    t: "Dọn tự động chỉ kiểm tra lần đầu sau 30 phút; quét trùng không kẹp kích thước tối thiểu",
+    why: "Luồng `auto-clean` ngủ 30 phút rồi mới kiểm tra — phiên dùng máy ngắn hơn thì không bao giờ dọn. `disk_scan_duplicates` nhận `min_bytes` bất kỳ từ UI; giá trị nhỏ trên ổ vài triệu file sẽ giữ toàn bộ danh sách trong RAM.",
+    ev: ["src-tauri/src/lib.rs:91", "src-tauri/src/disk/mod.rs:353"],
+    fix: "Kiểm tra lần đầu sau ~2 phút rồi mới theo chu kỳ 30 phút. Kẹp `min_bytes` ở command (đề xuất ≥ 64 KB cho quét trùng, ≥ 1 MB cho file lớn).",
+    ok: "Test `validate`/clamp; bật lịch dọn, mở app, sau 2–3 phút có dòng `cleaner.auto` trong nhật ký." },
+
+  { id: "U1", g: "ux", p: "mid", ph: 4, e: "S",
+    t: "Trang Tiến trình và Khởi động không dùng `PageShell`",
+    why: "Hai trang tự viết `<section>/<h1>` nên tiêu đề không to lên ở màn 2xl và khoảng cách khác 8 trang còn lại.",
+    ev: ["src/pages/Processes.tsx:245", "src/pages/Startup.tsx:155"],
+    fix: "Chuyển sang `PageShell` (title, subtitle, `actions` chứa ô tìm kiếm / Tải lại).",
+    ok: "`layout-check` sạch ở 4 kích thước × 2 theme; ảnh chụp không lệch so với trước ở 1100x720." },
+  { id: "U2", g: "ux", p: "lo", ph: 4, e: "M",
+    t: "Emoji và ký tự được dùng làm biểu tượng",
+    why: "`🛡`, `🔒`, `✓`, `↻`, `▸▾` phụ thuộc font máy, trái quy ước “biểu tượng tự vẽ trong `Icons.tsx`”.",
+    ev: ["src/components/Elevation.tsx:57", "src/pages/Processes.tsx", "src/pages/Startup.tsx"],
+    fix: "Thêm `IconLock`, `IconCheck`, `IconRefresh`, `IconChevron` vào `Icons.tsx` và thay thế.",
+    ok: "Không còn emoji trong `src/` (grep); layout-check sạch." },
+  { id: "U3", g: "ux", p: "lo", ph: 4, e: "M",
+    t: "Class và thành phần lặp lại ngoài `ui.ts`",
+    why: "Ô chọn ưu tiên ở Tiến trình tự viết class; `Notice` bo `rounded-md` trong khi khung khác `rounded-xl`; cột Publisher viết hai lần (Tiến trình, Khởi động); Sidebar/Disk/Settings còn chuỗi màu riêng. `ArcGauge` dùng `id=\"arc-glow\"` cố định (trùng id nếu có 2 đồng hồ). Hằng `NOTHING_FREED` khai báo ở cả Rust và TS.",
+    ev: ["src/components/Card.tsx:32", "src/components/ArcGauge.tsx:38", "src/components/SystemDeepClean.tsx:16"],
+    fix: "Tách `PublisherCell` dùng chung; dùng `SELECT`/`PANEL`; `useId()` cho gradient; backend trả sẵn cờ “không lấy lại được gì”.",
+    ok: "layout-check sạch; không còn chuỗi class trùng `SURFACE`/`DIALOG` ngoài `ui.ts`." },
+  { id: "U4", g: "ux", p: "lo", ph: 4, e: "S",
+    t: "Thanh trượt ngưỡng Smart Boost lưu và ghi nhật ký mỗi lần nhả phím/chuột",
+    why: "`onPointerUp`/`onKeyUp` gọi `save` kể cả khi giá trị không đổi (bấm Tab qua cũng ghi một dòng `settings.memory`).",
+    ev: ["src/pages/Memory.tsx:75"],
+    fix: "Chỉ lưu khi giá trị khác bản đã lưu.",
+    ok: "Bấm Tab qua thanh trượt không tạo dòng mới trong Nhật ký thao tác." },
+  { id: "U5", g: "ux", p: "lo", ph: 4, e: "S",
+    t: "Nhận biết lỗi “thiếu quyền” bằng cách dò chữ trong thông báo",
+    why: "Trang Khởi động dùng regex trên message tiếng Anh/Việt của Windows; máy ngôn ngữ khác sẽ không khớp.",
+    ev: ["src/pages/Startup.tsx:111"],
+    fix: "Backend đổi `ERROR_ACCESS_DENIED` thành `AppError::Forbidden(\"cần quyền Administrator…\")`; UI kiểm tra `code === \"forbidden\"`.",
+    ok: "Tắt một mục HKLM khi chạy quyền thường ⇒ thông báo có nút nâng quyền, không phụ thuộc ngôn ngữ Windows." },
+
+  { id: "B1", g: "build", p: "mid", ph: 3, e: "S",
+    t: "`crate-type` build thừa `staticlib` + `cdylib`",
+    why: "Hai loại này chỉ cần cho mobile. Với `lto = \"fat\"`, mỗi loại là một lần LTO/sinh mã riêng ⇒ build release lâu hơn không cần thiết (đa OS/mobile đang để sau).",
+    ev: ["src-tauri/Cargo.toml:11"],
+    fix: "Để `crate-type = [\"rlib\"]` (hoặc bỏ dòng). Đo thời gian `npm run tauri build` trước/sau và xác nhận bộ cài chạy.",
+    ok: "Bộ cài NSIS build được, cài và chạy bình thường; ghi thời gian build trước/sau." },
+  { id: "B2", g: "build", p: "lo", ph: 6, e: "M",
+    t: "Mã lặp ở tầng command và tiện ích",
+    why: "4 hàm `blocking()` giống nhau trong `commands/*`; 2 hàm `now_ms`; 2 hàm `expand_env` (`sys/session.rs` và `startup/command.rs`); `run_elevated` và `run_elevated_pid` gần như trùng.",
+    ev: ["src-tauri/src/commands/cleaner.rs:10", "src-tauri/src/store/mod.rs:158", "src-tauri/src/sys/session.rs:103", "src-tauri/src/sys/shell.rs:70"],
+    fix: "Một `commands::blocking(app, what, f)`; một `now_ms`; `session::expand_env` gọi bản có `lookup`; `run_elevated` gọi `run_elevated_pid`.",
+    ok: "Không đổi hành vi; toàn bộ test qua." },
+  { id: "B3", g: "build", p: "lo", ph: 6, e: "S",
+    t: "Có chú thích `eslint-disable` nhưng dự án không có ESLint",
+    why: "3 chú thích `react-hooks/exhaustive-deps` không có tác dụng; lỗi thiếu dependency của hook không được CI bắt.",
+    ev: ["src/components/Elevation.tsx", "src/hooks/useWindowVisible.ts", "src/pages/Diagnosis.tsx"],
+    fix: "Chọn một: (a) thêm ESLint + `eslint-plugin-react-hooks` vào CI (thêm devDependency — cần bạn đồng ý), hoặc (b) xoá chú thích.",
+    ok: "CI có bước lint, hoặc không còn chú thích thừa." },
+
+  { id: "T1", g: "doc", p: "mid", ph: 6, e: "M",
+    t: "Skill `rust-skills` trong repo nặng và chứa nhiều quy tắc bị cấm",
+    why: "`SKILL.md` 37,8 KB (≈10 nghìn token mỗi lần gọi), 265 file quy tắc (1,4 MB). Khoảng 24 dòng trong mục lục trỏ tới thứ `CLAUDE.md` cấm (tokio, tracing, proptest, criterion, PGO, `target-cpu`, arena…) và nhiều nhóm không áp dụng cho app này (`async-` 18, `proj-` 14, `doc-` 12, `macro-` 8, `obs-` 7). Agent phải đọc rồi tự loại — tốn token và dễ áp dụng nhầm.",
+    ev: [".claude/skills/rust-skills/SKILL.md", "CLAUDE.md (mục “Chuẩn code Rust”)"],
+    fix: "Tạo bản rút gọn theo dự án: giữ nhóm `own/err/mem/unsafe/conc/num/type/conv/serde/pat/coll/name/lint/anti/perf`, xoá file quy tắc bị cấm, ghi rõ trong `SOURCE.txt` đã cắt gì. Khi đó danh sách “không dùng” trong `CLAUDE.md` rút còn 2–3 dòng.",
+    ok: "`SKILL.md` ≤ 15 KB; không còn quy tắc nào mâu thuẫn `CLAUDE.md`." },
+  { id: "T2", g: "doc", p: "mid", ph: 6, e: "S",
+    t: "39 skill cấp người dùng nạp vào mọi phiên, trùng và không liên quan",
+    why: "`~/.claude/skills` (6,7 MB) có `rust-router` (“dùng cho MỌI câu hỏi Rust”), `m01`–`m15`, `unsafe-checker`, `coding-guidelines` trùng vai trò với `rust-skills`; cùng `domain-web/fintech/iot/embedded/ml/cloud-native/cli`, `rust-daily`, `core-*` không liên quan dự án. Riêng phần mô tả đã ≈10 nghìn ký tự (≈3–4 nghìn token) cho MỖI phiên. Mã nguồn còn trích mã quy tắc của bộ này (`unsafe-checker ffi-15`, `m05-type-driven`) trong khi `CLAUDE.md` nói chuẩn là skill trong repo.",
+    ev: ["~/.claude/skills (ngoài repo — tôi không sửa)", "src-tauri/src/sys/handle.rs", "src-tauri/src/sys/process.rs", "src-tauri/src/memory/calc.rs"],
+    fix: "Chọn MỘT bộ chuẩn Rust. Nếu giữ `rust-skills` trong repo: gỡ/tắt bộ `rust-router` + `m*` + `domain-*` ở cấp người dùng và đổi 5 chú thích trích dẫn sang mô tả bằng lời. Việc gỡ skill cấp người dùng do bạn tự làm.",
+    ok: "Danh sách skill đầu phiên chỉ còn skill thực sự dùng; grep `unsafe-checker|m05-` trong `src-tauri` không còn kết quả." },
+  { id: "T3", g: "doc", p: "lo", ph: 6, e: "M",
+    t: "`CLAUDE.md` 18 KB (≈6 nghìn token mỗi phiên) có phần lặp và phần ít khi cần",
+    why: "Quy định manifest `asInvoker` xuất hiện ở 3 mục; “Máy mới”, “Phát hành”, mốc đo hiệu năng chi tiết chỉ cần cho vài loại việc.",
+    ev: ["CLAUDE.md"],
+    fix: "Gộp phần lặp; chuyển “Máy mới” và “Phát hành” sang `CONTRIBUTING.md`, mốc đo sang `docs/PERF.md`, để lại một dòng trỏ tới. Mục AN TOÀN và các “quyết định của người dùng” giữ nguyên văn.",
+    ok: "`CLAUDE.md` ≤ 11 KB, không mất quy tắc nào (so từng gạch đầu dòng)." },
+  { id: "T4", g: "doc", p: "lo", ph: 6, e: "S",
+    t: "`PROMPTS.md` lỗi thời; chưa có `AGENTS.md`",
+    why: "`PROMPTS.md` chỉ còn giá trị lịch sử (đã gắn ghi chú). Dự án không có `AGENTS.md` — agent không phải Claude Code sẽ không đọc `CLAUDE.md`.",
+    ev: ["PROMPTS.md"],
+    fix: "Xoá `PROMPTS.md` hoặc chuyển vào `docs/history/`. Nếu dùng agent khác: tạo `AGENTS.md` một dòng trỏ tới `CLAUDE.md`.",
+    ok: "Không còn tài liệu mâu thuẫn `CLAUDE.md` ở thư mục gốc." },
+  { id: "T5", g: "doc", p: "lo", ph: 6, e: "S",
+    t: "4 bản README + 2 bản tài liệu an toàn phải đồng bộ tay",
+    why: "`README.md`/`.vi`/`.ja`/`.zh-CN` và `docs/AN-TOAN.md`/`SAFETY.md` — mỗi thay đổi tính năng tốn 4–6 lần công sửa; app dành cho cá nhân và vài người bạn.",
+    ev: ["README.md", "README.vi.md", "README.ja.md", "README.zh-CN.md"],
+    fix: "Giữ tiếng Việt + tiếng Anh; hai bản còn lại bỏ hoặc ghi rõ “có thể chậm cập nhật”.",
+    ok: "Theo quyết định của bạn." },
+];
+
+const PHASES = [
+  [1, "An toàn và chính xác", "Sửa trước vì ảnh hưởng tới quyền hạn và lời khuyên app đưa cho người dùng."],
+  [2, "Tác vụ dài: tiến độ và nối lại", "Hoàn thiện yêu cầu “tác vụ lâu phải có %” của CLAUDE.md."],
+  [3, "Hiệu năng và thời gian build", "Mỗi mục phải kèm số đo trước/sau."],
+  [4, "Đồng bộ giao diện", "Bắt buộc chạy layout-check 4 kích thước × 2 theme."],
+  [5, "Bổ sung về chuyên môn Windows", "Rule dọn rác, Khởi động, Ứng dụng, Chẩn đoán."],
+  [6, "Dọn mã, tài liệu, skills", "Giảm token mỗi phiên và công bảo trì."],
+];
+
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const md = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+const $ = (id) => document.getElementById(id);
+const KEY = "pcm-audit-2026-11-11";
+let picked = new Set();
+try { picked = new Set(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch { /* không lưu được thì thôi */ }
+let filter = "all";
+
+$("verify").textContent = VERIFY + " ";
+const n = (p) => ITEMS.filter((i) => i.p === p).length;
+$("stats").innerHTML = [
+  [FIXED.length, "đã sửa ngay"], [ITEMS.length, "đề xuất chờ duyệt"], [n("hi"), "ưu tiên cao"], [n("mid"), "ưu tiên trung bình"], [n("lo"), "ưu tiên thấp"],
+].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+
+$("fixed").innerHTML = FIXED.map(([t, d, f]) => `
+  <div class="card fixed"><div class="head"><div>
+    <h3>${md(t)}</h3>
+    <div class="tags"><span class="tag ok">đã sửa</span>${f.map((x) => `<span class="tag id">${esc(x)}</span>`).join("")}</div>
+    <div class="body"><p>${md(d)}</p></div>
+  </div></div></div>`).join("");
+
+function renderFilters() {
+  const opts = [["all", "Tất cả"], ["hi", "Cao"], ["mid", "Trung bình"], ["lo", "Thấp"], ...Object.entries(GROUPS)];
+  $("filters").innerHTML = opts.map(([k, l]) => `<button data-f="${k}" class="${filter === k ? "on" : ""}">${l}</button>`).join("");
+}
+const shown = () => ITEMS.filter((i) => filter === "all" || i.p === filter || i.g === filter);
+
+function renderItems() {
+  $("items").innerHTML = shown().map((i) => `
+    <div class="card"><div class="head">
+      <input type="checkbox" id="c-${i.id}" data-id="${i.id}" ${picked.has(i.id) ? "checked" : ""} aria-label="Chọn ${i.id}">
+      <div style="min-width:0;flex:1">
+        <label for="c-${i.id}"><h3>${md(i.t)}</h3></label>
+        <div class="tags">
+          <span class="tag id">${i.id}</span><span class="tag ${i.p}">Ưu tiên: ${PRI[i.p]}</span>
+          <span class="tag">${GROUPS[i.g]}</span><span class="tag">Công sức: ${i.e}</span><span class="tag">Giai đoạn ${i.ph}</span>
+        </div>
+      </div></div>
+      <div class="body">
+        <div class="lbl">Vấn đề</div><p>${md(i.why)}</p>
+        <div class="lbl">Bằng chứng</div><ul class="files">${i.ev.map((x) => `<li><code>${esc(x)}</code></li>`).join("")}</ul>
+        <div class="lbl">Đề xuất</div><p>${md(i.fix)}</p>
+        <div class="lbl">Xong khi</div><p>${md(i.ok)}</p>
+      </div>
+    </div>`).join("");
+  $("count").textContent = `Đã chọn ${picked.size}/${ITEMS.length} đề xuất`;
+}
+
+function renderPhases() {
+  $("phases").innerHTML = PHASES.map(([no, name, note]) => `
+    <div class="phase"><h3>Giai đoạn ${no} — ${name}</h3><p>${note}</p>
+      <ol>${ITEMS.filter((i) => i.ph === no).map((i) => `<li><b>${i.id}</b> — ${md(i.t)} <span class="tag ${i.p}">${PRI[i.p]}</span></li>`).join("")}</ol>
+    </div>`).join("");
+}
+
+function planText() {
+  const chosen = ITEMS.filter((i) => picked.has(i.id));
+  const lines = [
+    "# Plan triển khai — PC Manager (từ bản rà soát 2026-11-11)", "",
+    "Đọc CLAUDE.md trước. Mỗi giai đoạn một commit (chỉ commit khi tôi yêu cầu). Sau mỗi giai đoạn chạy:",
+    "cargo clippy --all-targets -- -D warnings ; cargo test ; npm run build",
+    "Sửa giao diện thì chạy thêm scripts/layout-check.js ở 860x560, 1100x720, 1366x768, 1920x1080, cả hai theme.",
+    "Không thêm thư viện, không nới lỏng mục AN TOÀN, cập nhật CHANGELOG.md cho thay đổi người dùng thấy được.", "",
+  ];
+  for (const [no, name] of PHASES) {
+    const list = chosen.filter((i) => i.ph === no);
+    if (!list.length) continue;
+    lines.push(`## Giai đoạn ${no} — ${name}`, "");
+    for (const i of list) {
+      lines.push(`### ${i.id}. ${i.t} (ưu tiên ${PRI[i.p].toLowerCase()})`, `- Vấn đề: ${i.why}`, `- File: ${i.ev.join(", ")}`, `- Cần làm: ${i.fix}`, `- Xong khi: ${i.ok}`, "");
+    }
+  }
+  return lines.join("\n");
+}
+
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...picked])); } catch { /* bỏ qua */ } };
+$("filters").addEventListener("click", (e) => { const f = e.target.dataset.f; if (f) { filter = f; renderFilters(); renderItems(); } });
+$("items").addEventListener("change", (e) => { const id = e.target.dataset.id; if (!id) return; e.target.checked ? picked.add(id) : picked.delete(id); save(); renderItems(); });
+$("all").onclick = () => { shown().forEach((i) => picked.add(i.id)); save(); renderItems(); };
+$("none").onclick = () => { picked.clear(); save(); renderItems(); };
+$("copy").onclick = async () => {
+  if (!picked.size) { $("count").textContent = "Chưa chọn đề xuất nào"; return; }
+  const text = planText();
+  try { await navigator.clipboard.writeText(text); $("count").textContent = `Đã sao chép plan (${picked.size} mục)`; }
+  catch {
+    const pre = document.createElement("pre"); pre.textContent = text;
+    $("phases").after(pre); pre.scrollIntoView(); $("count").textContent = "Không sao chép được — plan hiện ở cuối trang";
+  }
+};
+renderFilters(); renderItems(); renderPhases();
+</script>
+</body>
+</html>

@@ -3,11 +3,15 @@
 App quản lý máy Windows 10/11 x64 giống Windows PC Manager: RAM, dọn rác, tiến trình, ứng dụng khởi động, app không dùng.
 Mục tiêu: **nhẹ, nhanh, an toàn**. App tối ưu RAM thì bản thân không được ngốn RAM.
 
+> **Kế hoạch đang triển khai: [`docs/PLAN.md`](docs/PLAN.md)** — 6 giai đoạn từ bản rà soát 2026-11-11, kèm quy tắc
+> chung cho mọi giai đoạn và bảng trạng thái. Khi được giao "làm giai đoạn N", đọc file đó trước; xong thì cập nhật
+> bảng trạng thái trong cùng commit.
+
 ## Stack (không tự ý đổi)
 - Tauri 2 + React + TypeScript + Vite (frontend), Tailwind cho style
 - Rust stable, toolchain `x86_64-pc-windows-msvc`
-- `windows` crate (windows-rs) cho Win32/NT API; `sysinfo` chỉ dùng tạm khi chưa có impl native
-- `rusqlite` (feature `bundled`) cho lưu trữ, `serde`, `thiserror`, `anyhow` (chỉ ở tầng command), `rayon`, `jwalk`, `blake3`
+- `windows` crate (windows-rs) cho Win32/NT API (không dùng `sysinfo`); `windows-registry` cho registry; `webview2-com` chỉ để hạ mức RAM của WebView2
+- `rusqlite` (feature `bundled`) cho lưu trữ, `serde`, `toml` (chỉ parse), `thiserror`, `anyhow` (chỉ ở tầng command), `rayon`, `jwalk`, `blake3`
 - Chạy **1 tiến trình**, mặc định **quyền thường** (manifest `asInvoker`, mở app không hỏi UAC). Chức năng cần admin: UI hiện nút "Chạy với quyền Administrator" → `ShellExecuteExW` verb `runas` chạy lại chính exe (UAC hỏi), bản cũ thoát. Backend phải chạy được khi thiếu quyền (báo "cần quyền Administrator", không crash).
 - **Không tách Windows Service** (quyết định của người dùng): app dùng cho cá nhân và vài người bạn; service chạy quyền hệ thống nhận lệnh từ người dùng thường làm tăng rủi ro bảo mật mà lợi ích không đáng. Không đề xuất lại trừ khi người dùng yêu cầu.
 
@@ -15,17 +19,20 @@ Mục tiêu: **nhẹ, nhanh, an toàn**. App tối ưu RAM thì bản thân khô
 ```
 pc-manager/
 ├── src/                      # React UI
-│   ├── pages/  Dashboard, Memory, Cleaner, Processes, Startup, Apps, Settings
+│   ├── pages/  Dashboard, Diagnosis, SystemInfo, Memory, Cleaner, Processes, Startup, Apps, Disk, Settings
 │   ├── components/  hooks/  lib/api.ts   # mọi invoke() gom ở api.ts, có type
+│   └── dev/demo.ts           # dữ liệu giả cho `?demo` (chỉ bản dev)
 ├── src-tauri/
 │   ├── build.rs              # nhúng app manifest (asInvoker + Common-Controls v6)
 │   └── src/
-│       ├── main.rs  lib.rs   # đăng ký commands, tray
+│       ├── main.rs  lib.rs   # đăng ký commands, luồng nền (auto boost, sampler, auto clean)
+│       ├── tray.rs  jobs.rs  settings.rs  state.rs  bg.rs (pool nền)  sync.rs  crashlog.rs  error.rs
 │       ├── commands/         # mỏng: validate input -> gọi module -> map lỗi
 │       ├── sys/              # TOÀN BỘ code unsafe/windows-rs nằm ở đây, bọc thành hàm safe
+│       ├── user/             # ngữ cảnh "user đang đăng nhập" (env, HKCU, Thùng rác)
 │       ├── memory/  cleaner/  process/  startup/  usage/  disk/
-│       ├── store/            # SQLite
-│       └── error.rs
+│       ├── diagnosis/  hwinfo/   # Smart Diagnosis, Cấu hình máy
+│       └── store/            # SQLite
 └── rules/cleaner.toml        # rule dọn rác, nhúng bằng include_str!
 ```
 
