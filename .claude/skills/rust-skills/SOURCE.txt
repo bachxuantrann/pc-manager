@@ -1,0 +1,2 @@
+Nguồn: https://github.com/leonardomso/rust-skills (commit fd2a861, MIT)
+Cài thủ công ngày 2026-11-11: chỉ SKILL.md + rules/ + LICENSE (không cài checks/, .github/).

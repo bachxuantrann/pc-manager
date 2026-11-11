@@ -5,6 +5,7 @@ import PageShell from "../components/PageShell";
 import { AdminNotice } from "../components/Elevation";
 import { api, errorMessage, type ActionLogEntry, type AppInfo, type GeneralSettings } from "../lib/api";
 import { SmartSettings } from "./Memory";
+import { useTheme, type ThemePref } from "../lib/theme";
 
 const INTERVALS = [
   { v: 1, label: "Hằng ngày" },
@@ -224,6 +225,35 @@ function ActivityLog() {
   );
 }
 
+const THEMES: { id: ThemePref; label: string }[] = [
+  { id: "dark", label: "Tối" },
+  { id: "light", label: "Sáng" },
+  { id: "system", label: "Theo Windows" },
+];
+
+function ThemeSettings() {
+  const [pref, setPref] = useTheme();
+  return (
+    <div className="grid gap-2 text-sm">
+      <div className="inline-flex w-fit rounded-lg bg-black/5 p-1 dark:bg-white/5" role="radiogroup" aria-label="Giao diện">
+        {THEMES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={pref === t.id}
+            onClick={() => setPref(t.id)}
+            className={`rounded-md px-3 py-1.5 transition ${pref === t.id ? "bg-white shadow-sm dark:bg-white/15" : "opacity-70 hover:opacity-100"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs opacity-60">Chỉ đổi màu giao diện, không ảnh hưởng tốc độ của app.</p>
+    </div>
+  );
+}
+
 export default function Settings() {
   const [s, setS] = useState<GeneralSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -237,13 +267,22 @@ export default function Settings() {
   return (
     <PageShell title="Cài đặt" subtitle="Smart Boost, dọn tự động, khởi động cùng Windows, thư mục bảo vệ.">
       {err && <Notice tone="error">{err}</Notice>}
-      <div className="grid items-start gap-4 xl:grid-cols-2">
+      {/*
+        Hai cột, card cùng hàng cao bằng nhau (grid mặc định stretch): ghép các card có độ cao gần
+        nhau thành một hàng; card nhiều nội dung (whitelist, nhật ký) chiếm cả hàng.
+      */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Giao diện">
+          <ThemeSettings />
+        </Card>
+        <Card title="Khởi động">{s && <AutostartSettings s={s} onChange={setS} />}</Card>
         <Card title="Smart Boost">
           <SmartSettings />
         </Card>
-        <Card title="Khởi động">{s && <AutostartSettings s={s} onChange={setS} />}</Card>
         <Card title="Lịch dọn tự động">{s && <AutoCleanSettings s={s} onChange={setS} />}</Card>
-        <Card title="Thư mục bảo vệ (whitelist)">{s && <WhitelistSettings s={s} onChange={setS} />}</Card>
+        <Card title="Thư mục bảo vệ (whitelist)" className="xl:col-span-2">
+          {s && <WhitelistSettings s={s} onChange={setS} />}
+        </Card>
         <Card title="Nhật ký thao tác" className="xl:col-span-2">
           <ActivityLog />
         </Card>

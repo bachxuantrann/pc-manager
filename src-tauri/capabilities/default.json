@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Quyền tối thiểu cho cửa sổ chính",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-set-theme"]
 }

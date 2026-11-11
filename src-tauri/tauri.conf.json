@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "theme": "Dark",
         "create": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu --renderer-process-limit=1 --disable-background-networking --disable-component-update --disable-sync --no-pings --disable-extensions",
         "title": "PC Manager",

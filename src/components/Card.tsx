@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 
 export function Card({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg bg-white p-4 shadow-sm dark:bg-white/5 2xl:p-6 ${className}`}>
+    <div
+      className={`rounded-2xl border border-black/5 bg-white p-4 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.035] dark:shadow-none 2xl:p-6 ${className}`}
+    >
       {title && <h2 className="mb-3 text-sm font-medium opacity-70 2xl:text-base">{title}</h2>}
       {children}
     </div>

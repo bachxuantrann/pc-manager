@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/*
+ * Chế độ tối do app điều khiển (thuộc tính data-theme trên <html>, xem lib/theme.ts), không theo
+ * Windows nữa: mọi lớp `dark:` sẵn có trong các trang tự áp dụng khi data-theme="dark".
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   --color-accent: #2563eb;
 }
@@ -18,11 +24,21 @@ body {
   user-select: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #111318;
-    color: #e5e7eb;
-  }
+/*
+ * Giao diện tối: nền gần đen với vài vệt sáng xanh TĨNH (gradient, không ảnh, không blur, không
+ * animation) — WebView chạy không GPU (--disable-gpu) nên mọi hiệu ứng do CPU vẽ; nền tĩnh chỉ vẽ
+ * một lần, không tốn thêm khi cuộn (vùng cuộn là <main>, không phải body).
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-accent: #3b82f6;
+}
+[data-theme="dark"] body {
+  color: #e6e9ef;
+  background-color: #05070b;
+  background-image:
+    radial-gradient(60rem 40rem at -10% 70%, rgb(29 78 216 / 0.22), transparent 60%),
+    radial-gradient(50rem 30rem at 110% -10%, rgb(37 99 235 / 0.1), transparent 60%);
 }
 
 /* Thanh tiến độ khi chưa biết tổng (ProgressBar với pct = null). */

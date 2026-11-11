@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { PageActiveContext, PageBusyContext, type ReportBusy } from "./hooks/usePageActive";
 import { useRunningJobs } from "./hooks/useJobResume";
+import { ThemeContext, useThemePref } from "./lib/theme";
 import type { JobKind } from "./lib/api";
 import Sidebar, { type PageId } from "./components/Sidebar";
 import { MemoryFeedProvider } from "./hooks/useMemoryFeed";
@@ -37,6 +38,7 @@ const JOB_PAGE: Record<JobKind, PageId> = {
 };
 
 export default function App() {
+  const theme = useThemePref();
   const [page, setPageState] = useState<PageId>("dashboard");
   // Trang đã mở được giữ sống (chỉ ẩn đi) => tác vụ đang chạy, tiến độ, kết quả quét, lựa chọn
   // vẫn còn khi chuyển tab rồi quay lại. Polling của trang ẩn tự dừng (usePageActive).
@@ -71,6 +73,7 @@ export default function App() {
     (id) => (busy[id]?.length ?? 0) > 0 || [...jobs].some((k) => JOB_PAGE[k] === id),
   );
   return (
+    <ThemeContext.Provider value={theme}>
     <ElevationProvider page={page} onStartPage={openStart}>
     <MemoryFeedProvider>
       <div className="flex h-full">
@@ -92,5 +95,6 @@ export default function App() {
       </div>
     </MemoryFeedProvider>
     </ElevationProvider>
+    </ThemeContext.Provider>
   );
 }

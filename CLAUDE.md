@@ -73,3 +73,51 @@ pc-manager/
 ## Lưu ý manifest (build.rs)
 Dùng `tauri_build::WindowsAttributes::new().app_manifest(include_str!("app.manifest"))`.
 Manifest có `requestedExecutionLevel level="asInvoker"` VÀ dependency `Microsoft.Windows.Common-Controls` version 6.0.0.0 — thiếu cái này dialog/message box sẽ lỗi. Không đổi lại `requireAdministrator` (quyết định của người dùng: mở app không hỏi UAC).
+
+## Máy mới: chuẩn bị môi trường
+- Cần: Node 22+, Rust stable `x86_64-pc-windows-msvc`, Visual Studio Build Tools (C++). Trên Windows:
+  `winget install --id Rustlang.Rustup -e`, rồi
+  `winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"` (UAC hỏi một lần).
+  Bash của Claude Code chưa có `cargo` trong PATH sau khi cài: thêm `export PATH="$PATH:$USERPROFILE/.cargo/bin"`.
+- `npm ci` → `npm run tauri dev`. Máy chưa chắc có `gh`, Python: dùng `node` (có `node:sqlite` để đọc DB của app khi cần chẩn đoán).
+- Skill `rust-skills` nằm trong repo ở `.claude/skills/rust-skills/` (xem mục "Chuẩn code Rust"); `.claude/launch.json` có cấu hình `vite` (dev, cổng 1420) và `vite-prod` (bản build, cổng 4173) để xem giao diện.
+- Xem giao diện không cần backend: `npm run dev` rồi mở `http://localhost:1420/?demo&page=<trang>` (dữ liệu giả trong `src/dev/demo.ts`, chỉ có ở bản dev).
+
+## Chuẩn code Rust (rust-skills)
+Code Rust bám theo `.claude/skills/rust-skills/` (đọc `SKILL.md`, mở file `rules/<prefix>-*.md` liên quan trước khi viết). Quy tắc của dự án (file này) luôn thắng. **Không dùng** các quy tắc sau (gây crash / rò rỉ bộ nhớ / hỏng build / làm app nặng):
+- `panic = "abort"` (giữ `unwind`), `expect()`/`unwrap()` ngoài test.
+- `target-cpu=native` (exe crash trên CPU cũ của máy khác), SIMD portable / `likely` / `collect_into` (chỉ có ở nightly), cú pháp riêng edition 2024 như `if let` chains (dự án là edition 2021, MSRV 1.85).
+- Arena allocator (bộ nhớ phình mãi với app chạy nền lâu), `serde(deny_unknown_fields)` cho dữ liệu người dùng đã lưu (chỉ dùng cho dữ liệu nhúng lúc build như `cleaner.toml`).
+- Thêm thư viện để tối ưu vi mô khi chưa đo (SmallVec, ArrayVec, ThinVec, CompactString, ahash), tokio/tokio-util, tracing, PGO, `inline(always)`; framework test nặng (mockall, proptest, criterion, loom, insta) — chỉ khi người dùng đồng ý.
+- Quy tắc cho thư viện xuất bản crates.io (serde optional, cargo metadata, proc-macro, workspace, Miri).
+
+## Người dùng đang đăng nhập vs tài khoản chạy app (máy domain)
+Máy công ty: user thường (vd `DC1\bachtx`) nâng quyền bằng tài khoản admin **khác** (vd `bavv`) ở hộp UAC. Tài khoản admin chỉ để lấy quyền — mọi thứ "của người dùng" phải là của người đang đăng nhập:
+- `crate::user` (`src-tauri/src/user/`): `user::env(k)` thay cho `std::env::var` với biến theo user (`%TEMP%`, `%LOCALAPPDATA%`, `%APPDATA%`, `%USERPROFILE%`, OneDrive…); `user::hkcu()` thay cho `CURRENT_USER` (= `HKEY_USERS\<SID>` khi khác user); `user::hkcu_reg_root()` cho reg.exe; `user::environment()` cho tiến trình con. **Không** đọc `CURRENT_USER`/biến môi trường theo user trực tiếp ở code mới.
+- `user::recycle`: Thùng rác của user đang đăng nhập (khác user => ghi trực tiếp cặp `$R`/`$I` vào `X:\$Recycle.Bin\<SID>`, đã kiểm chứng Explorer khôi phục được). Mọi "xoá vào Thùng rác" đi qua đây.
+- `sys::session`: so SID tiến trình với SID phiên (WTS); `sys::launch::spawn_as_shell_user`: chạy chương trình dưới user đang đăng nhập (cha = Explorer) — dùng cho trình gỡ app HKCU khi đang nâng quyền.
+- WebView2 tự hạ quyền về user đang đăng nhập => thư mục dữ liệu WebView2 phải trong profile của user đó (`tray.rs`), nếu không: lỗi 0x8000FFFF "can't read and write to its data directory". Chẩn đoán ghi ở `%APPDATA%\com.pcmanager.app\logs\webview.log` (của user đang đăng nhập).
+- Dữ liệu app (SQLite), crash.log, task khởi động cùng Windows (XML, InteractiveToken cho SID của user) đều theo user đang đăng nhập.
+- Gỡ app: HKLM chạy trình gỡ trực tiếp, cần admin mà đang quyền thường (mã 740) => mở lại qua UAC (`run_elevated_pid`); HKCU khi đang nâng quyền bằng tài khoản khác => `spawn_as_shell_user`. App riêng của tài khoản khác không hiện.
+
+## Tác vụ dài & giữ trạng thái giao diện
+- Tác vụ dài mới (quét/dọn/DISM/…) chạy qua `jobs::run(app, "<kind>", …)` (`src-tauri/src/jobs.rs`): ghi tiến độ/kết quả, phát sự kiện `jobs://update`; thêm `kind` vào `jobs::KINDS`, `JobKind` (api.ts), `JOB_PAGE` (App.tsx); phía UI gọi qua `tracked()` trong `api.ts` và nối lại bằng `useJobResume` — đóng cửa sổ (xuống tray) rồi mở lại vẫn thấy tiến độ/kết quả.
+- Tác vụ lâu phải có tiến độ % (`ProgressBar`; không biết tổng => dạng chạy qua lại, ước lượng thì ghi rõ "ước lượng").
+- App giữ sống các trang đã mở (chỉ ẩn): polling dùng `useWindowVisible`/`useVisibleInterval` (tự dừng khi trang ẩn hoặc cửa sổ ẩn); tác vụ đang chạy báo bằng `useReportBusy` (dấu xoay ở Sidebar); phím tắt toàn cửa sổ phải kiểm tra `usePageActive()`.
+- Thông báo kết quả/lỗi của thao tác: `<Notice onClose>` để người dùng tắt được.
+
+## Giao diện (theme)
+- Tối mặc định, đổi ở Cài đặt → Giao diện (Tối/Sáng/Theo Windows; lưu `localStorage` `pcm.theme`, `src/lib/theme.ts`). Biến thể `dark:` của Tailwind do `data-theme` trên `<html>` điều khiển (không theo Windows), thanh tiêu đề đổi theo qua `plugin:window|set_theme`.
+- WebView chạy `--disable-gpu` (tiết kiệm RAM) => mọi hiệu ứng do CPU vẽ: **không** dùng `backdrop-blur`, glow/animation lặp, ảnh nền lớn; chỉ gradient tĩnh và SVG. Biểu tượng tự vẽ trong `components/Icons.tsx` (không thêm thư viện icon). Không import cả module `@tauri-apps/api/window` chỉ để gọi một lệnh (nặng ~18 KB) — gọi `invoke` thẳng.
+- Giữ React (đã đo: toàn bộ JS heap ~2.3 MB so với WebView2 ~132 MB riêng — bỏ React lợi ~1 MB, không đáng viết lại).
+- Thanh công cụ (tìm kiếm, Tải lại, Sắp xếp) đặt ở `PageShell actions`, không đặt cuối hàng bộ lọc (hàng bộ lọc đổi độ dài sẽ đẩy chúng xuống dòng). Lưới card 2 cột: ghép card cao gần nhau cùng hàng, card nhiều nội dung `xl:col-span-2`.
+
+## Hiệu năng — mốc đo & ngân sách
+- Mốc (v1.0.4, cửa sổ mở, máy 12 luồng): tiến trình Rust ~10.8 MB private (38 MB working set gồm DLL dùng chung); WebView2 6 tiến trình ~132 MB private; CPU ~0.5% trên Tổng quan. Đóng cửa sổ => WebView2 bị huỷ.
+- Ngân sách cho tính năng mới: Rust lúc rảnh ≤ ~12 MB private, WebView2 tăng ≤ 5 MB, CPU trên Tổng quan không tăng, đóng cửa sổ = 0%. Đo bằng `Get-Process pc-manager` + `msedgewebview2` có `com.pcmanager.app` trong command line (Win32_Process). Phần nào vượt => báo người dùng để cắt/giảm.
+- Không dùng WMI, không polling khi không hiển thị, đọc thông tin phần cứng một lần khi mở trang; tránh PDH cho GPU (tốn CPU), tránh nạp DXGI vào tiến trình Rust (đọc thông tin GPU từ registry).
+
+## Phát hành
+- `CHANGELOG.md`: mỗi phiên bản một mục `## [x.y.z] - YYYY-MM-DD`; CI (`release.yml`) lấy mục đó làm "Có gì mới" trên GitHub Release, **thiếu mục => không phát hành**.
+- Nâng phiên bản ở 4 chỗ: `package.json`, `package-lock.json` (2 dòng đầu), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`. Chạy clippy/test/build → commit → `git tag -a vX.Y.Z -m "..."` → push `main` và tag. Push tag `v*` = CI build bộ cài + tạo Release.
+- Chỉ commit/push/tag khi người dùng yêu cầu. Người dùng thử bộ cài build trên máy trước khi phát hành.

@@ -1,4 +1,6 @@
+import type { ComponentType } from "react";
 import { Spinner } from "./Button";
+import { IconActivity, IconChip, IconDisk, IconGrid, IconHome, IconPower, IconSettings, IconShield, IconSparkle } from "./Icons";
 import { ElevateButton, useElevation } from "./Elevation";
 
 export type PageId =
@@ -11,15 +13,15 @@ export type PageId =
   | "disk"
   | "settings";
 
-const ITEMS: { id: PageId; label: string; icon: string }[] = [
-  { id: "dashboard", label: "Tổng quan", icon: "◉" },
-  { id: "memory", label: "Bộ nhớ", icon: "▤" },
-  { id: "cleaner", label: "Dọn rác", icon: "✦" },
-  { id: "processes", label: "Tiến trình", icon: "≡" },
-  { id: "startup", label: "Khởi động", icon: "⏻" },
-  { id: "apps", label: "Ứng dụng", icon: "▦" },
-  { id: "disk", label: "Ổ đĩa", icon: "◫" },
-  { id: "settings", label: "Cài đặt", icon: "⚙" },
+const ITEMS: { id: PageId; label: string; icon: ComponentType<{ className?: string }> }[] = [
+  { id: "dashboard", label: "Tổng quan", icon: IconHome },
+  { id: "memory", label: "Bộ nhớ", icon: IconChip },
+  { id: "cleaner", label: "Dọn rác", icon: IconSparkle },
+  { id: "processes", label: "Tiến trình", icon: IconActivity },
+  { id: "startup", label: "Khởi động", icon: IconPower },
+  { id: "apps", label: "Ứng dụng", icon: IconGrid },
+  { id: "disk", label: "Ổ đĩa", icon: IconDisk },
+  { id: "settings", label: "Cài đặt", icon: IconSettings },
 ];
 
 interface Props {
@@ -32,22 +34,32 @@ interface Props {
 export default function Sidebar({ current, onSelect, busy = [] }: Props) {
   const { elevated } = useElevation();
   return (
-    <nav className="flex w-52 shrink-0 flex-col gap-1 border-r border-black/10 bg-white/70 p-3 dark:border-white/10 dark:bg-white/5">
-      <div className="mb-4 px-3 pt-2 text-lg font-semibold">PC Manager</div>
+    <nav
+      className="m-2 mr-0 flex w-56 shrink-0 flex-col gap-1 rounded-2xl border border-black/5 bg-white/80 p-3
+        dark:border-white/[0.06] dark:bg-[#0a0d13]/90"
+    >
+      <div className="mb-5 flex items-center gap-2 px-3 pt-3">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-white">
+          <IconShield className="h-4 w-4" />
+        </span>
+        <span className="text-[17px] font-semibold tracking-tight">PC Manager</span>
+      </div>
       {ITEMS.map((it) => {
         const active = it.id === current;
+        const Icon = it.icon;
         return (
           <button
             key={it.id}
             type="button"
             onClick={() => onSelect(it.id)}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+            aria-current={active ? "page" : undefined}
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
               active
-                ? "bg-accent text-white"
-                : "hover:bg-black/5 dark:hover:bg-white/10"
+                ? "bg-accent/10 font-medium text-accent dark:bg-white/10 dark:text-white"
+                : "opacity-75 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/[0.06]"
             }`}
           >
-            <span className="w-4 text-center">{it.icon}</span>
+            <Icon />
             {it.label}
             {busy.includes(it.id) && (
               <span className="ml-auto" title="Đang chạy" aria-label="Đang chạy">
@@ -63,7 +75,11 @@ export default function Sidebar({ current, onSelect, busy = [] }: Props) {
           <ElevateButton label="Quyền Administrator" />
         </div>
       )}
-      {elevated === true && <div className="mt-auto px-3 text-xs opacity-50">🛡 Quyền Administrator</div>}
+      {elevated === true && (
+        <div className="mt-auto flex items-center gap-2 px-3 pb-1 text-xs opacity-50">
+          <IconShield className="h-3.5 w-3.5" /> Quyền Administrator
+        </div>
+      )}
     </nav>
   );
 }

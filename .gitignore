@@ -5,5 +5,8 @@ src-tauri/gen/
 *.log
 .DS_Store
 
-# Cấu hình xem trước giao diện của Claude Code (cục bộ)
-.claude/
+# Claude Code: bỏ qua cấu hình cục bộ, NHƯNG giữ skill (rust-skills) và cấu hình chạy thử giao diện
+# trong repo để chuyển máy là dùng được ngay.
+.claude/*
+!.claude/skills/
+!.claude/launch.json
