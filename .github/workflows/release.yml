@@ -27,6 +27,8 @@ jobs:
           $tag = "${{ github.ref_name }}".TrimStart('v')
           $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($tag -ne $pkg) { throw "Tag v$tag khác phiên bản package.json ($pkg). Đổi phiên bản rồi tag lại." }
+          $cl = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          if ($cl -notmatch ('(?m)^## \[' + [regex]::Escape($tag) + '\]')) { throw "CHANGELOG.md chưa có mục ## [$tag] — thêm ghi chú phiên bản rồi tag lại." }
 
       - uses: actions/setup-node@v5
         with:
@@ -102,6 +104,10 @@ jobs:
 
           An toàn và quyền admin: [docs/AN-TOAN.md](https://github.com/${{ github.repository }}/blob/$tag/docs/AN-TOAN.md). Yêu cầu Windows 10/11 x64.
           "@
+          # "Có gì mới" = mục của phiên bản này trong CHANGELOG.md.
+          $cl = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          $m = [regex]::Match($cl, '(?ms)^## \[' + [regex]::Escape($ver) + '\][^\n]*\n(.*?)(?=^## \[|\z)')
+          $changes = if ($m.Success) { "## Có gì mới`n`n" + $m.Groups[1].Value.Trim() + "`n`n" } else { "" }
           $notesFile = Join-Path $env:RUNNER_TEMP "notes.md"
-          [IO.File]::WriteAllText($notesFile, ($notes -replace '(?m)^          ', ''))
+          [IO.File]::WriteAllText($notesFile, $changes + ($notes -replace '(?m)^          ', ''))
           gh release create $tag $asset --title "PC Manager $tag" --notes-file $notesFile --generate-notes --verify-tag

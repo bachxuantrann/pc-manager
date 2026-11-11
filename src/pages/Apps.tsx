@@ -1,3 +1,4 @@
+import { useReportBusy } from "../hooks/usePageActive";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "../components/Button";
 import { Card, Notice } from "../components/Card";
@@ -52,6 +53,7 @@ export default function Apps() {
   const [sort, setSort] = useState<SortKey>("size");
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  useReportBusy(busyId !== null);
   const [leftoverApp, setLeftoverApp] = useState<LeftoverTarget | null>(null);
   /** App đang chạy trình gỡ — chờ backend báo xong. */
   const [uninstalling, setUninstalling] = useState<Set<string>>(new Set());

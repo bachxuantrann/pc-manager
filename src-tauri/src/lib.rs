@@ -12,6 +12,7 @@ pub mod bg;
 pub mod commands;
 pub mod crashlog;
 pub mod error;
+pub mod jobs;
 pub mod settings;
 pub mod state;
 pub mod sync;
@@ -190,6 +191,8 @@ pub fn run() {
             commands::app_info,
             commands::app_relaunch_elevated,
             commands::recent_actions,
+            commands::jobs_snapshot,
+            commands::jobs_ack,
             commands::memory::memory_status,
             commands::memory::memory_boost,
             commands::memory::memory_smart_boost,

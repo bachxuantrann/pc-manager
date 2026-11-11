@@ -409,6 +409,36 @@ export interface GeneralSettings {
   elevated: boolean;
 }
 
+// ---- Tác vụ dài: backend ghi lại để cửa sổ mở lại nối lại được (xem src-tauri/src/jobs.rs) ----
+
+export type JobKind = "cleaner.scan" | "cleaner.clean" | "winsxs.analyze" | "winsxs.clean" | "winold.clean" | "disk.large" | "disk.dups";
+
+export type JobOutcome = { ok: true; value: unknown } | { ok: false; value: unknown };
+
+export interface Job {
+  kind: JobKind;
+  running: boolean;
+  startedMs: number;
+  progress: unknown;
+  /** Có khi đã xong; backend giữ tới khi `jobsAck`. */
+  outcome: JobOutcome | null;
+}
+
+/** Tác vụ do CHÍNH cửa sổ này khởi chạy (đang chờ kết quả qua invoke) — không cần nối lại. */
+const startedHere = new Set<JobKind>();
+export const isStartedHere = (k: JobKind) => startedHere.has(k);
+
+async function tracked<T>(kind: JobKind, run: () => Promise<T>): Promise<T> {
+  startedHere.add(kind);
+  try {
+    return await run();
+  } finally {
+    startedHere.delete(kind);
+    // Đã nhận kết quả => backend không cần giữ lại cho lần mở cửa sổ sau.
+    invoke<void>("jobs_ack", { kind }).catch(() => {});
+  }
+}
+
 function channel<T>(cb: (v: T) => void): Channel<T> {
   const ch = new Channel<T>();
   ch.onmessage = cb;
@@ -450,10 +480,10 @@ export const api = {
     invoke<void>("startup_set_enabled", { source: e.source, name: e.keyName, enabled }),
 
   cleanerScan: (onProgress: (p: CleanerProgress) => void) =>
-    invoke<ScanResult>("cleaner_scan", { onProgress: channel(onProgress) }),
+    tracked("cleaner.scan", () => invoke<ScanResult>("cleaner_scan", { onProgress: channel(onProgress) })),
   /** Chỉ gửi id rule — backend tự xoá đúng các file nó đã quét. */
   cleanerClean: (scanId: number, ruleIds: string[], dryRun: boolean, onProgress: (p: CleanerProgress) => void) =>
-    invoke<CleanReport>("cleaner_clean", { scanId, ruleIds, dryRun, onProgress: channel(onProgress) }),
+    tracked("cleaner.clean", () => invoke<CleanReport>("cleaner_clean", { scanId, ruleIds, dryRun, onProgress: channel(onProgress) })),
   cleanerCancel: () => invoke<void>("cleaner_cancel"),
 
   appsList: () => invoke<AppsOverview>("apps_list"),
@@ -469,16 +499,16 @@ export const api = {
     listen<UninstallFinished>("apps://uninstall-finished", (e) => cb(e.payload)),
 
   systemWindowsOldInfo: () => invoke<WindowsOldInfo>("system_windows_old_info"),
-  systemAnalyzeWinsxs: () => invoke<WinSxsAnalysis>("system_analyze_winsxs"),
+  systemAnalyzeWinsxs: () => tracked("winsxs.analyze", () => invoke<WinSxsAnalysis>("system_analyze_winsxs")),
   systemCleanWinsxs: (onProgress: (pct: number) => void) =>
-    invoke<SystemCleanReport>("system_clean_winsxs", { onProgress: channel(onProgress) }),
-  systemCleanWindowsOld: () => invoke<SystemCleanReport>("system_clean_windows_old"),
+    tracked("winsxs.clean", () => invoke<SystemCleanReport>("system_clean_winsxs", { onProgress: channel(onProgress) })),
+  systemCleanWindowsOld: () => tracked("winold.clean", () => invoke<SystemCleanReport>("system_clean_windows_old")),
 
   diskDrives: () => invoke<DriveInfo[]>("disk_drives"),
   diskScanLarge: (root: string, minBytes: number, onProgress: (p: DiskProgress) => void) =>
-    invoke<LargeScan>("disk_scan_large", { root, minBytes, onProgress: channel(onProgress) }),
+    tracked("disk.large", () => invoke<LargeScan>("disk_scan_large", { root, minBytes, onProgress: channel(onProgress) })),
   diskScanDuplicates: (root: string, minBytes: number, onProgress: (p: DiskProgress) => void) =>
-    invoke<DupScan>("disk_scan_duplicates", { root, minBytes, onProgress: channel(onProgress) }),
+    tracked("disk.dups", () => invoke<DupScan>("disk_scan_duplicates", { root, minBytes, onProgress: channel(onProgress) })),
   diskCancel: () => invoke<void>("disk_cancel"),
   /** Chỉ gửi scanId + id file — backend chuyển vào Thùng rác (khôi phục được). */
   diskRecycle: (scanId: number, fileIds: number[]) => invoke<RecycleReport>("disk_recycle", { scanId, fileIds }),
@@ -488,6 +518,11 @@ export const api = {
     invoke<AutoClean>("settings_set_auto_clean", { enabled, intervalDays, ruleIds }),
   settingsSetWhitelist: (paths: string[]) => invoke<string[]>("settings_set_whitelist", { paths }),
   settingsSetAutostart: (enabled: boolean) => invoke<boolean>("settings_set_autostart", { enabled }),
+
+  jobsSnapshot: () => invoke<Job[]>("jobs_snapshot"),
+  jobsAck: (kind: JobKind) => invoke<void>("jobs_ack", { kind }),
+  /** Tác vụ dài bắt đầu / có tiến độ / xong (từ bất kỳ cửa sổ nào). */
+  onJob: (cb: (j: Job) => void): Promise<UnlistenFn> => listen<Job>("jobs://update", (e) => cb(e.payload)),
 
   /** Boost xong từ bất kỳ nguồn nào (UI, tray, auto). */
   onBoosted: (cb: (r: BoostReport) => void): Promise<UnlistenFn> =>

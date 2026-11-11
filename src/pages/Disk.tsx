@@ -1,3 +1,5 @@
+import { useReportBusy } from "../hooks/usePageActive";
+import { useJobResume } from "../hooks/useJobResume";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "../components/Button";
 import { Card, Notice } from "../components/Card";
@@ -10,6 +12,7 @@ import {
   type DriveInfo,
   type DupScan,
   type FileItem,
+  type JobOutcome,
   type LargeScan,
   type RecycleReport,
 } from "../lib/api";
@@ -148,6 +151,7 @@ export default function Disk() {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [busy, setBusy] = useState(false);
+  useReportBusy(scanning || busy);
   /** Ẩn file rủi ro (dữ liệu ứng dụng, ổ đĩa ảo, file bị chặn) — mặc định bật. */
   const [safeOnly, setSafeOnly] = useState(true);
 
@@ -181,6 +185,25 @@ export default function Disk() {
       setScanning(false);
     }
   };
+
+  // Cửa sổ bị đóng (xuống tray) lúc đang quét rồi mở lại: backend vẫn quét => hiện lại tiến độ, kết quả.
+  const resumeScan = (which: Tab) => ({
+    onRunning: (p: DiskProgress | null) => {
+      reset();
+      setTab(which);
+      setScanning(true);
+      setProgress(p);
+    },
+    onProgress: setProgress,
+    onDone: (o: JobOutcome) => {
+      setScanning(false);
+      if (!o.ok) setError(errorMessage(o.value));
+      else if (which === "large") setLarge(o.value as LargeScan);
+      else setDups(o.value as DupScan);
+    },
+  });
+  useJobResume<DiskProgress>("disk.large", resumeScan("large"));
+  useJobResume<DiskProgress>("disk.dups", resumeScan("dup"));
 
   const current = tab === "large" ? large : dups;
   // Chỉ những gì đang hiện mới được chọn / chuyển vào Thùng rác.

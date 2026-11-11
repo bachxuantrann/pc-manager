@@ -18,6 +18,8 @@ pub struct AppState {
     pub disk: DiskManager,
     pub system: SystemCleaner,
     pub leftovers: LeftoverManager,
+    /// Tác vụ dài để giao diện mở lại nối lại được.
+    pub jobs: crate::jobs::Jobs,
 }
 
 impl AppState {
@@ -56,6 +58,7 @@ impl AppState {
             leftovers: LeftoverManager::new(
                 data_dir.map_or_else(|| std::env::temp_dir().join("pc-manager"), Path::to_path_buf).join("backups"),
             ),
+            jobs: crate::jobs::Jobs::default(),
         }
     }
 }

@@ -1,3 +1,4 @@
+import { useReportBusy } from "../hooks/usePageActive";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, errorMessage, type BoostReport } from "../lib/api";
 import { formatBytes, pct } from "../lib/format";
@@ -94,6 +95,7 @@ function BoostCard({
 export default function BoostPanel() {
   const { overview, lastBoost } = useMemoryFeed();
   const [busy, setBusy] = useState<CardId | null>(null);
+  useReportBusy(busy !== null);
   const [confirmDeep, setConfirmDeep] = useState(false);
   const [results, setResults] = useState<Partial<Record<CardId, CardResult>>>({});
   const [threshold, setThreshold] = useState<number | null>(null);

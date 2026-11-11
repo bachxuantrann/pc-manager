@@ -1,3 +1,4 @@
+import { Spinner } from "./Button";
 import { ElevateButton, useElevation } from "./Elevation";
 
 export type PageId =
@@ -24,9 +25,11 @@ const ITEMS: { id: PageId; label: string; icon: string }[] = [
 interface Props {
   current: PageId;
   onSelect: (id: PageId) => void;
+  /** Trang còn tác vụ đang chạy (quét, dọn, gỡ…) — hiện dấu xoay cạnh tên. */
+  busy?: PageId[];
 }
 
-export default function Sidebar({ current, onSelect }: Props) {
+export default function Sidebar({ current, onSelect, busy = [] }: Props) {
   const { elevated } = useElevation();
   return (
     <nav className="flex w-52 shrink-0 flex-col gap-1 border-r border-black/10 bg-white/70 p-3 dark:border-white/10 dark:bg-white/5">
@@ -46,6 +49,11 @@ export default function Sidebar({ current, onSelect }: Props) {
           >
             <span className="w-4 text-center">{it.icon}</span>
             {it.label}
+            {busy.includes(it.id) && (
+              <span className="ml-auto" title="Đang chạy" aria-label="Đang chạy">
+                <Spinner />
+              </span>
+            )}
           </button>
         );
       })}

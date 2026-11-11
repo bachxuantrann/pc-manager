@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "./Button";
 import { Notice } from "./Card";
+import { usePageActive, useReportBusy } from "../hooks/usePageActive";
 import { api, errorMessage, type Dependency, type LeftoverKind, type LeftoverReport, type LeftoverScan } from "../lib/api";
 import { formatBytes } from "../lib/format";
 
@@ -55,12 +56,17 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
   }, [app]);
 
   const busy = phase === "scan" || phase === "clean";
+  // Hộp thoại luôn được mount (trả về null khi đóng) và `phase` khởi đầu là "scan" =>
+  // chỉ báo "đang chạy" khi đang mở cho một app.
+  useReportBusy(app !== null && busy);
+  // Trang đang ẩn (vẫn giữ sống) => không nhận phím của trang khác.
+  const active = usePageActive();
   useEffect(() => {
-    if (!app) return;
+    if (!app || !active) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose(phase === "done");
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [app, busy, phase, onClose]);
+  }, [app, busy, phase, onClose, active]);
 
   const chosen = useMemo(() => (scan?.items ?? []).filter((i) => selected.has(i.id)), [scan, selected]);
   const chosenBytes = chosen.reduce((s, i) => s + (i.bytes ?? 0), 0);

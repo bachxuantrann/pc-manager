@@ -5,6 +5,8 @@ import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
 import { AdminNotice, useElevation } from "./Elevation";
 import { api, errorMessage, type SystemCleanReport, type WinSxsAnalysis, type WindowsOldInfo } from "../lib/api";
 import { formatBytes } from "../lib/format";
+import { useReportBusy } from "../hooks/usePageActive";
+import { useJobResume } from "../hooks/useJobResume";
 
 type Busy = null | "analyze" | "winsxs" | "winold";
 
@@ -53,11 +55,14 @@ function AnalysisView({ a }: { a: WinSxsAnalysis }) {
 export default function SystemDeepClean() {
   const { elevated } = useElevation();
   const [busy, setBusy] = useState<Busy>(null);
+  useReportBusy(busy !== null);
   const [progress, setProgress] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<WinSxsAnalysis | null>(null);
   const [winOld, setWinOld] = useState<WindowsOldInfo | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  /** Vừa dọn WinSxS: bảng phân tích cũ đã bị ẩn, mời người dùng phân tích lại. */
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     api.systemWindowsOldInfo().then(setWinOld).catch(() => setWinOld(null));
@@ -67,7 +72,9 @@ export default function SystemDeepClean() {
 
   const analyze = async () => {
     setBusy("analyze");
-    setMsg(null);
+    setStale(false);
+    // Giữ thông báo kết quả dọn (nếu có); chỉ xoá thông báo lỗi cũ.
+    setMsg((m) => (m?.tone === "error" ? null : m));
     try {
       setAnalysis(await api.systemAnalyzeWinsxs());
     } catch (e) {
@@ -99,18 +106,7 @@ export default function SystemDeepClean() {
         setProgress(0);
         setMsg(null);
         try {
-          const r = await api.systemCleanWinsxs(setProgress);
-          setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)} Đang phân tích lại…` });
-          setAnalysis(null);
-          setProgress(null);
-          // Phân tích lại để thấy kết quả sau khi dọn (~1 phút).
-          setBusy("analyze");
-          try {
-            setAnalysis(await api.systemAnalyzeWinsxs());
-            setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
-          } catch {
-            setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
-          }
+          afterWinsxsClean(await api.systemCleanWinsxs(setProgress));
         } catch (e) {
           setMsg({ tone: "error", text: `WinSxS: ${errorMessage(e)}` });
         } finally {
@@ -119,6 +115,59 @@ export default function SystemDeepClean() {
         }
       },
     });
+
+  /**
+   * Dọn xong: báo kết quả, ẩn bảng phân tích cũ (đã sai sau khi dọn). Không tự phân tích lại
+   * (mất ~1 phút) — người dùng bấm "Phân tích lại" nếu muốn xem kho sau khi dọn.
+   */
+  const afterWinsxsClean = (r: SystemCleanReport) => {
+    setMsg({ tone: "ok", text: `WinSxS: ${freedText(r)}` });
+    setAnalysis(null);
+    setProgress(null);
+    setStale(true);
+  };
+
+  // Cửa sổ bị đóng (xuống tray) lúc DISM / Disk Cleanup đang chạy rồi mở lại: hiện lại trạng thái.
+  useJobResume<null>("winsxs.analyze", {
+    onRunning: () => {
+      setMsg(null);
+      setBusy("analyze");
+    },
+    onDone: (o) => {
+      setBusy(null);
+      if (o.ok) setAnalysis(o.value as WinSxsAnalysis);
+      else setMsg({ tone: "error", text: `Phân tích WinSxS: ${errorMessage(o.value)}` });
+    },
+  });
+  useJobResume<number>("winsxs.clean", {
+    onRunning: (p) => {
+      setMsg(null);
+      setBusy("winsxs");
+      setProgress(p ?? 0);
+    },
+    onProgress: setProgress,
+    onDone: (o) => {
+      setProgress(null);
+      setBusy(null);
+      if (o.ok) afterWinsxsClean(o.value as SystemCleanReport);
+      else setMsg({ tone: "error", text: `WinSxS: ${errorMessage(o.value)}` });
+    },
+  });
+  useJobResume<null>("winold.clean", {
+    onRunning: () => {
+      setMsg(null);
+      setBusy("winold");
+    },
+    onDone: (o) => {
+      setBusy(null);
+      setMsg(
+        o.ok
+          ? { tone: "ok", text: `Windows.old: ${freedText(o.value as SystemCleanReport)}` }
+          : { tone: "error", text: `Windows.old: ${errorMessage(o.value)}` },
+      );
+      api.systemWindowsOldInfo().then(setWinOld).catch(() => {});
+    },
+  });
 
   const cleanWinOld = () =>
     setConfirm({
@@ -161,6 +210,14 @@ export default function SystemDeepClean() {
               Dọn bằng DISM — cách duy nhất an toàn. Không bao giờ xoá trực tiếp file trong WinSxS.
             </div>
             {analysis && <AnalysisView a={analysis} />}
+            {stale && !analysis && busy === null && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="opacity-70">Kho vừa thay đổi nên số liệu phân tích cũ đã được ẩn.</span>
+                <Button variant="secondary" size="sm" disabled={locked} onClick={analyze} title="DISM /AnalyzeComponentStore — chỉ đọc, ~1 phút">
+                  Phân tích lại để xem kho sau khi dọn
+                </Button>
+              </div>
+            )}
             {busy === "winsxs" && (
               <div className="mt-2">
                 <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">

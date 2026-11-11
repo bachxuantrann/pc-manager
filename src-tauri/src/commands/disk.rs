@@ -3,6 +3,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::disk::{self, DiskProgress, DriveInfo, DupScan, LargeScan, RecycleReport};
 use crate::error::{AppError, AppResult};
+use crate::jobs;
 use crate::state::AppState;
 
 async fn blocking<T, F>(app: AppHandle, f: F) -> AppResult<T>
@@ -24,24 +25,14 @@ pub async fn disk_drives() -> AppResult<Vec<DriveInfo>> {
 #[tauri::command]
 pub async fn disk_scan_large(app: AppHandle, root: String, min_bytes: u64, on_progress: Channel<DiskProgress>) -> AppResult<LargeScan> {
     let root = disk::validate_root(&root)?;
-    blocking(app, move |s| {
-        s.disk.scan_large(&root, min_bytes, &|p| {
-            let _ = on_progress.send(p);
-        })
-    })
-    .await
+    jobs::run(app, "disk.large", "xử lý ổ đĩa", Some(on_progress), move |s, report| s.disk.scan_large(&root, min_bytes, &|p| report(p))).await
 }
 
 /// Tìm file trùng (chỉ đọc): size → blake3 4KB đầu → blake3 toàn bộ.
 #[tauri::command]
 pub async fn disk_scan_duplicates(app: AppHandle, root: String, min_bytes: u64, on_progress: Channel<DiskProgress>) -> AppResult<DupScan> {
     let root = disk::validate_root(&root)?;
-    blocking(app, move |s| {
-        s.disk.scan_duplicates(&root, min_bytes, &|p| {
-            let _ = on_progress.send(p);
-        })
-    })
-    .await
+    jobs::run(app, "disk.dups", "xử lý ổ đĩa", Some(on_progress), move |s, report| s.disk.scan_duplicates(&root, min_bytes, &|p| report(p))).await
 }
 
 #[tauri::command]

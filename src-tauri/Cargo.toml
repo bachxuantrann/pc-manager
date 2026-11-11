@@ -1,6 +1,6 @@
 [package]
 name = "pc-manager"
-version = "1.0.2"
+version = "1.0.3"
 description = "PC Manager — nhẹ, nhanh, an toàn"
 edition = "2021"
 rust-version = "1.85"

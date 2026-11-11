@@ -1,3 +1,5 @@
+import { useReportBusy } from "../hooks/usePageActive";
+import { useJobResume } from "../hooks/useJobResume";
 import { useMemo, useState } from "react";
 import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
@@ -152,6 +154,7 @@ function ReportView({ rep, onRescan, onRealClean }: { rep: CleanReport; onRescan
 
 export default function Cleaner() {
   const [phase, setPhase] = useState<Phase>("idle");
+  useReportBusy(phase === "scanning" || phase === "cleaning");
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<CleanerProgress | null>(null);
@@ -168,16 +171,58 @@ export default function Cleaner() {
     setReport(null);
     setCancelling(false);
     try {
-      const r = await api.cleanerScan(setProgress);
-      setScan(r);
-      setSelected(new Set(r.rules.filter((x) => isReady(x) && x.defaultSelected).map((x) => x.id)));
-      setPhase(r.cancelled ? "idle" : "preview");
-      if (r.cancelled) setError("Đã huỷ quét.");
+      applyScan(await api.cleanerScan(setProgress));
     } catch (e) {
       setError(errorMessage(e));
       setPhase("idle");
     }
   };
+
+  const applyScan = (r: ScanResult) => {
+    setScan(r);
+    setSelected(new Set(r.rules.filter((x) => isReady(x) && x.defaultSelected).map((x) => x.id)));
+    setPhase(r.cancelled ? "idle" : "preview");
+    if (r.cancelled) setError("Đã huỷ quét.");
+  };
+
+  // Cửa sổ bị đóng (xuống tray) lúc đang quét/dọn rồi mở lại: backend vẫn chạy => hiện lại tiến độ
+  // và kết quả khi xong.
+  const resuming = (p: CleanerProgress | null) => {
+    setError(null);
+    setReport(null);
+    setCancelling(false);
+    setProgress(p);
+  };
+  useJobResume<CleanerProgress>("cleaner.scan", {
+    onRunning: (p) => {
+      resuming(p);
+      setPhase("scanning");
+    },
+    onProgress: setProgress,
+    onDone: (o) => {
+      if (o.ok) applyScan(o.value as ScanResult);
+      else {
+        setError(errorMessage(o.value));
+        setPhase("idle");
+      }
+    },
+  });
+  useJobResume<CleanerProgress>("cleaner.clean", {
+    onRunning: (p) => {
+      resuming(p);
+      setPhase("cleaning");
+    },
+    onProgress: setProgress,
+    onDone: (o) => {
+      if (o.ok) {
+        setReport(o.value as CleanReport);
+        setPhase("report");
+      } else {
+        setError(errorMessage(o.value));
+        setPhase(scan ? "preview" : "idle");
+      }
+    },
+  });
 
   const runClean = async (dry: boolean) => {
     if (!scan) return;

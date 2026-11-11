@@ -102,3 +102,19 @@ mod tests {
         assert!(!super::valid_page("x\"; calc"));
     }
 }
+
+/// Tác vụ dài đang chạy / đã xong mà giao diện chưa nhận (cửa sổ vừa mở lại dùng để nối lại).
+#[tauri::command]
+pub async fn jobs_snapshot(state: State<'_, AppState>) -> AppResult<Vec<crate::jobs::Job>> {
+    Ok(state.jobs.snapshot())
+}
+
+/// Giao diện đã nhận kết quả của tác vụ `kind` => backend xoá kết quả đó.
+#[tauri::command]
+pub async fn jobs_ack(state: State<'_, AppState>, kind: String) -> AppResult<()> {
+    if !crate::jobs::KINDS.contains(&kind.as_str()) {
+        return Err(AppError::InvalidInput("loại tác vụ không hợp lệ".into()));
+    }
+    state.jobs.ack(&kind);
+    Ok(())
+}

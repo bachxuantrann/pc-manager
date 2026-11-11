@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import Button from "./Button";
+import { usePageActive } from "../hooks/usePageActive";
 
 export interface ConfirmRequest {
   title: string;
@@ -11,12 +12,14 @@ export interface ConfirmRequest {
 
 /** Hộp xác nhận modal. Esc = huỷ. Nút xác nhận không tự focus để tránh Enter nhầm. */
 export default function ConfirmDialog({ req, onClose }: { req: ConfirmRequest | null; onClose: () => void }) {
+  // Trang đang ẩn (vẫn giữ sống) => không nhận phím của trang khác.
+  const active = usePageActive();
   useEffect(() => {
-    if (!req) return;
+    if (!req || !active) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [req, onClose]);
+  }, [req, onClose, active]);
 
   if (!req) return null;
   return (
