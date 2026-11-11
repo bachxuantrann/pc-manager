@@ -3,7 +3,7 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
-## [1.1.0] - chưa phát hành
+## [1.1.0] - 2026-11-11
 
 ### Mới
 - **Giao diện tối mới** (mặc định): nền tối có ánh xanh, card bo góc, thanh bên có biểu tượng, đồng

@@ -113,7 +113,7 @@ Máy công ty: user thường (vd `DC1\bachtx`) nâng quyền bằng tài khoả
 - Thanh công cụ (tìm kiếm, Tải lại, Sắp xếp) đặt ở `PageShell actions`, không đặt cuối hàng bộ lọc (hàng bộ lọc đổi độ dài sẽ đẩy chúng xuống dòng). Lưới card 2 cột: ghép card cao gần nhau cùng hàng, card nhiều nội dung `xl:col-span-2`.
 
 ## Hiệu năng — mốc đo & ngân sách
-- Mốc (v1.0.4, cửa sổ mở, máy 12 luồng): tiến trình Rust ~10.8 MB private (38 MB working set gồm DLL dùng chung); WebView2 6 tiến trình ~132 MB private; CPU ~0.5% trên Tổng quan. Đóng cửa sổ => WebView2 bị huỷ.
+- Mốc (máy 12 luồng, đo trên app cài thật, trang Tổng quan): v1.0.4 — Rust ~10.8 MB private, WebView2 6 tiến trình ~132 MB private (cửa sổ đã mở lâu, nhiều trang đã nạp), CPU ~0.5%. v1.1.0 (theme mới + Cấu hình máy + Chẩn đoán) — Rust ~10.2 MB private, WebView2 ~106 MB private (cửa sổ vừa mở), CPU ~0.1%. Cửa sổ đóng (tray): Rust ~10.7 MB, WebView2 bị huỷ (0). Smart Diagnosis quét nhanh ~0.2 giây.
 - Ngân sách cho tính năng mới: Rust lúc rảnh ≤ ~12 MB private, WebView2 tăng ≤ 5 MB, CPU trên Tổng quan không tăng, đóng cửa sổ = 0%. Đo bằng `Get-Process pc-manager` + `msedgewebview2` có `com.pcmanager.app` trong command line (Win32_Process). Phần nào vượt => báo người dùng để cắt/giảm.
 - Không dùng WMI, không polling khi không hiển thị, đọc thông tin phần cứng một lần khi mở trang; tránh PDH cho GPU (tốn CPU), tránh nạp DXGI vào tiến trình Rust (đọc thông tin GPU từ registry).
 
