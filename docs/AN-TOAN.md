@@ -84,6 +84,11 @@ nhận; mọi lớp kiểm tra ở trên vẫn áp dụng.
 
 - Gỡ cài đặt chạy **trình gỡ của chính app** (đọc lại `UninstallString` từ registry, chỉ chạy
   đường dẫn tuyệt đối). Gỡ xong, app tự tìm phần còn sót.
+- App cài riêng cho người dùng (`HKCU`) luôn được gỡ **dưới tài khoản đang đăng nhập, quyền thường**,
+  kể cả khi PC Manager đang chạy quyền admin — mọi chương trình quyền thường sửa được lệnh gỡ của chúng,
+  nên chạy bằng quyền admin là đường leo thang đặc quyền. Không chạy được theo cách đó thì báo lỗi, không
+  bao giờ quay về dùng quyền admin.
+- App Microsoft Store chỉ hiện để xem; gỡ trong Windows Settings.
 - **Dọn phần còn sót:** backend tự tìm thư mục cài, thư mục AppData/ProgramData trùng tên app,
   shortcut Start Menu trỏ vào thư mục cài, key `Uninstall`. Mục chỉ khớp một phần tên ("có thể")
   mặc định không được chọn. Không bao giờ chọn:
@@ -118,7 +123,7 @@ Nói thẳng để không kỳ vọng sai:
 - **Boost sâu:** xoá **toàn bộ** standby list. RAM "trống" tăng mạnh, nhưng **RAM khả dụng
   gần như không đổi** (cache standby vốn đã được tính là khả dụng), và app mở lần sau sẽ
   **chậm hơn** vì phải đọc lại từ đĩa. Chỉ nên dùng khi thật sự cần.
-- **Smart Boost:** chỉ chạy khi RAM khả dụng dưới ngưỡng (mặc định 15%).
+- **Smart Boost:** chỉ chạy khi RAM khả dụng dưới ngưỡng (mặc định 15%), và dùng Boost nhẹ (Boost sâu lúc đó chỉ làm mất cache).
 - Báo cáo sau mỗi lần Boost tách riêng "RAM khả dụng tăng thêm" (lợi ích thật) và "cache đã
   xoá", để không thổi phồng kết quả.
 - **Thu gọn bộ nhớ (trim working set)** chỉ áp dụng cho tiến trình bạn tự chọn, không làm hàng

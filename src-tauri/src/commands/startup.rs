@@ -24,3 +24,24 @@ pub async fn startup_set_enabled(app: AppHandle, source: Source, name: String, e
     .await
     .map_err(|e| crate::error::task_failed("xử lý mục khởi động", e))?
 }
+
+/// Mở tab Startup của Task Manager (bật/tắt app Store tự chạy — PC Manager chỉ đọc nguồn này).
+/// Không dùng Settings → Apps → Startup: trang đó crash trên một số bản Windows 11 (SettingsHandlers_Startup.dll,
+/// 0xc0000005, gặp ở 26100.8521). Mở qua `cmd /c start` (ShellExecute) để Windows tự xử lý quyền của Taskmgr
+/// (manifest highestAvailable); PC Manager đang có quyền admin => chạy dưới user đang đăng nhập, nếu không Task
+/// Manager hiện mục khởi động của tài khoản admin.
+#[tauri::command]
+pub async fn startup_open_settings() -> AppResult<()> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let sys32 = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
+    let cmd = sys32.join("cmd.exe");
+    let args = format!("/d /c start \"\" \"{}\" /0 /startup", sys32.join("Taskmgr.exe").display());
+    if crate::sys::token::is_elevated().unwrap_or(true) {
+        crate::sys::launch::spawn_as_shell_user(&cmd, &args, &crate::user::environment(), CREATE_NO_WINDOW)
+            .map_err(|e| AppError::Other(format!("không mở được Task Manager: {}", e.message())))?;
+    } else {
+        std::process::Command::new(cmd).raw_arg(&args).creation_flags(CREATE_NO_WINDOW).spawn()?;
+    }
+    Ok(())
+}

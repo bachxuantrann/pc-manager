@@ -1,9 +1,11 @@
+import { IconCheck, IconX } from "./Icons";
 import { DIALOG, PANEL } from "./ui";
 import { useEffect, useMemo, useState } from "react";
 import Button, { Spinner } from "./Button";
 import { Notice } from "./Card";
 import { usePageActive, useReportBusy } from "../hooks/usePageActive";
-import { api, errorMessage, type Dependency, type LeftoverKind, type LeftoverReport, type LeftoverScan } from "../lib/api";
+import ProgressBar from "./ProgressBar";
+import { api, errorMessage, type Dependency, type LeftoverKind, type LeftoverProgress, type LeftoverReport, type LeftoverScan } from "../lib/api";
 import { formatBytes } from "../lib/format";
 
 const KIND_LABEL: Record<LeftoverKind, string> = {
@@ -34,6 +36,7 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [report, setReport] = useState<LeftoverReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<LeftoverProgress | null>(null);
 
   useEffect(() => {
     if (!app) return;
@@ -87,8 +90,9 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
     if (!scan) return;
     setPhase("clean");
     setError(null);
+    setProgress(null);
     try {
-      setReport(await api.appsLeftoversClean(scan.scanId, [...selected]));
+      setReport(await api.appsLeftoversClean(scan.scanId, [...selected], setProgress));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -183,7 +187,7 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
                         )}
                         {o && (
                           <span className={`text-xs ${o.ok ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                            {o.ok ? "✓ đã dọn" : `✗ ${o.message ?? "lỗi"}`}
+                            {o.ok ? <IconCheck /> : <IconX />} {o.ok ? "đã dọn" : (o.message ?? "lỗi")}
                           </span>
                         )}
                       </div>
@@ -208,6 +212,13 @@ export default function LeftoverDialog({ app, onClose }: { app: LeftoverTarget |
               đặt. Tiếp tục?
             </Notice>
           </div>
+        )}
+        {phase === "clean" && (
+          <ProgressBar
+            className="mt-3"
+            pct={progress && progress.total > 0 ? (progress.done / progress.total) * 100 : null}
+            label={progress ? `Đang dọn ${progress.done + 1} / ${progress.total}: ${progress.current}` : "Đang dọn…"}
+          />
         )}
         {phase === "done" && report && (
           <div className="mt-3">

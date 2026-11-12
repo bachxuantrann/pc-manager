@@ -14,7 +14,7 @@ large files and duplicates — in a 2.5 MB installer that idles at a few megabyt
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 ![Platform: Windows 10/11 x64](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078D4)
 
-**English** · [Tiếng Việt](README.vi.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+**English** · [Tiếng Việt](README.vi.md)
 
 </div>
 
@@ -133,7 +133,7 @@ Windows already manages memory well, so PC Manager does not promise miracles:
 - **Deep Boost** drops the *entire* standby cache. "Free" memory jumps, but **available memory
   barely changes** (standby cache already counts as available) and apps load more slowly the
   next time. Use it only when you have a specific reason.
-- **Smart Boost** runs only when available memory falls below a threshold (15% by default).
+- **Smart Boost** runs only when available memory falls below a threshold (15% by default), using the light Boost.
 - Every result separates **"available memory gained"** (the real benefit) from
   **"cache cleared"**.
 - **Trim working set** applies only to processes you select, never in bulk.

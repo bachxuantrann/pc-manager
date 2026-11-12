@@ -16,14 +16,22 @@
 param(
     [ValidateSet("test", "dev", "ram")] [string] $Mode = "test",
     [string] $Filter = "",
-    [switch] $Elevated  # dùng nội bộ khi script tự mở lại chính nó
+    [switch] $Elevated,  # dùng nội bộ khi script tự mở lại chính nó
+    # Dùng nội bộ: CARGO_HOME / RUSTUP_HOME của người đang đăng nhập. Nâng quyền bằng tài khoản admin KHÁC
+    # (máy domain) thì %USERPROFILE% trong cửa sổ admin là của tài khoản đó — không có cargo/rustup.
+    [string] $CargoHome = "",
+    [string] $RustupHome = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $tauri = Join-Path $root "src-tauri"
 $log = Join-Path $tauri "target\admin-test.log"
-$cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
+if ($CargoHome) { $env:CARGO_HOME = $CargoHome }
+if ($RustupHome) { $env:RUSTUP_HOME = $RustupHome }
+$cargoHomeDir = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
+$rustupHomeDir = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $env:USERPROFILE ".rustup" }
+$cargoBin = Join-Path $cargoHomeDir "bin"
 if (($env:Path -split ";") -notcontains $cargoBin) { $env:Path += ";$cargoBin" }
 
 function Test-Admin {
@@ -112,14 +120,16 @@ if ($Mode -eq "dev") {
     Write-Host "Mở cửa sổ admin cho tauri dev — hãy bấm Yes ở hộp UAC." -ForegroundColor Yellow
     Start-Process powershell -Verb RunAs -ArgumentList @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit",
-        "-File", "`"$PSCommandPath`"", "-Mode", "dev"
+        "-File", "`"$PSCommandPath`"", "-Mode", "dev",
+        "-CargoHome", "`"$cargoHomeDir`"", "-RustupHome", "`"$rustupHomeDir`""
     )
     return
 }
 
 Write-Host "Cần quyền Administrator — hãy bấm Yes ở hộp UAC…" -ForegroundColor Yellow
 if (Test-Path $log) { Remove-Item $log -Force }
-$argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"", "-Mode", $Mode, "-Elevated")
+$argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"", "-Mode", $Mode, "-Elevated",
+    "-CargoHome", "`"$cargoHomeDir`"", "-RustupHome", "`"$rustupHomeDir`"")
 if ($Filter) { $argList += @("-Filter", $Filter) }
 try {
     $p = Start-Process powershell -Verb RunAs -WindowStyle Minimized -ArgumentList $argList -Wait -PassThru

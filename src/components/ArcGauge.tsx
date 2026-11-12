@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 /**
  * Đồng hồ dạng vòng cung chia vạch (kiểu bảng điều khiển). SVG tĩnh: chỉ vẽ lại khi `value` đổi,
  * không animation lặp, không blur — WebView chạy không GPU nên mọi hiệu ứng do CPU vẽ.
@@ -31,17 +33,19 @@ export default function ArcGauge({
 }) {
   const v = value == null ? 0 : Math.min(100, Math.max(0, value));
   const lit = Math.round((v / 100) * TICKS);
+  // id riêng cho mỗi đồng hồ: id cố định sẽ trùng khi có hai đồng hồ trên cùng trang.
+  const glowId = `arc-glow-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const tone = v >= dangerAt ? "text-red-500" : v >= warnAt ? "text-amber-500" : "text-accent";
   return (
     <svg viewBox="0 0 200 150" className={`w-full max-w-[260px] ${className}`} role="img" aria-label={`${label}: ${value == null ? "—" : `${v.toFixed(0)}${unit}`}`}>
       <defs>
-        <radialGradient id="arc-glow" cx="50%" cy="100%" r="60%">
+        <radialGradient id={glowId} cx="50%" cy="100%" r="60%">
           <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.35" />
           <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
         </radialGradient>
       </defs>
       {/* Vệt sáng tĩnh dưới đồng hồ (giống ảnh mẫu), chỉ ở giao diện tối. */}
-      <ellipse cx={CX} cy={150} rx={95} ry={45} fill="url(#arc-glow)" className="hidden [[data-theme=dark]_&]:inline" />
+      <ellipse cx={CX} cy={150} rx={95} ry={45} fill={`url(#${glowId})`} className="hidden [[data-theme=dark]_&]:inline" />
       <g strokeLinecap="round" strokeWidth={3.2}>
         {Array.from({ length: TICKS }, (_, i) => {
           const angle = START - (SWEEP * i) / (TICKS - 1);

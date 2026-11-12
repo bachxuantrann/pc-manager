@@ -130,10 +130,7 @@ pub fn run(state: &AppState, deep: bool, report: &dyn Fn(DiagProgress)) -> AppRe
     if let Some(t) = sys::firmware::smbios_table() {
         let smb = crate::hwinfo::smbios::parse(&t);
         let filled: Vec<_> = smb.slots.iter().filter(|m| m.size_mb.is_some()).collect();
-        s.ram_slow = filled
-            .iter()
-            .filter_map(|m| Some((m.configured_mts?, m.speed_mts?)))
-            .find(|(now, max)| now < max && max - now >= 200);
+        s.ram_slow = rules::xmp_candidate(&filled);
         s.ram_slots_free = smb.ram_slots_total.map(|t| t.saturating_sub(u32::try_from(filled.len()).unwrap_or(u32::MAX)));
     }
     let disks = sys::storage::physical_disks();

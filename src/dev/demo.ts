@@ -77,7 +77,7 @@ const startup = (name: string, source: string, enabled: boolean, publisher: stri
   path: command.replace(/"/g, "").split(" --")[0],
   publisher: publisher ? signed(publisher) : { status: "unsigned" },
   enabled,
-  canToggle: source !== "scheduledTask",
+  canToggle: source !== "scheduledTask" && source !== "packagedTask",
   disabledAtMs: enabled ? null : now - 12 * DAY,
   note: null,
 });
@@ -88,6 +88,7 @@ const startupList = [
   startup("OneDrive", "runUser", true, "Microsoft Corporation", '"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe" /background'),
   startup("SecurityHealth", "runMachine", true, "Microsoft Windows", "C:\\Windows\\System32\\SecurityHealthSystray.exe"),
   startup("Steam", "runUser", false, "Valve Corp.", '"C:\\Program Files (x86)\\Steam\\steam.exe" -silent'),
+  startup("Microsoft Teams", "packagedTask", true, "Microsoft", "C:\\Program Files\\WindowsApps\\MSTeams_26288.2004.5269.3420_x64__8wekyb3d8bbwe\\msteams_autostarter.exe"),
   startup("PC Manager Autostart", "scheduledTask", true, null, '"C:\\Program Files\\PC Manager\\pc-manager.exe" --tray'),
 ];
 
@@ -139,6 +140,7 @@ const app = (name: string, publisher: string, version: string, sizeGB: number, i
   lastUsedMs: usedDaysAgo == null ? null : now - usedDaysAgo * DAY,
   lastUsedSource: usedDaysAgo == null ? null : "prefetch",
   canUninstall: true,
+  storeApp: false,
 });
 
 const apps = {
@@ -226,6 +228,15 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   disk_scan_duplicates: () => dups,
   settings_get: () => settings,
   recent_actions: () => actions,
+  jobs_snapshot: () => [],
+  update_check: () => ({
+    current: "1.1.3",
+    available: { version: "1.2.0", notes: "### Bảo mật\n- Gỡ app cài riêng cho người dùng luôn chạy với quyền thường.\n\n### Thay đổi\n- Tác vụ dài có tiến độ và nối lại được.", dateMs: now - DAY },
+    auto: true,
+    lastCheckMs: now - 60_000,
+    configured: true,
+  }),
+  update_set_auto: (args) => ({ current: "1.1.3", available: null, auto: !!args.enabled, lastCheckMs: now - 60_000, configured: true }),
   system_windows_old_info: () => ({ path: "C:\\Windows.old", exists: false, bytes: null }),
   diagnosis_run: () => {
     diagRuns++;

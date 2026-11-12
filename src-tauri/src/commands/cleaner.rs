@@ -1,5 +1,5 @@
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::cleaner::system::{SystemCleanReport, WinSxsAnalysis, WindowsOldInfo};
 use crate::cleaner::{CleanReport, Progress, ScanResult};
@@ -12,9 +12,7 @@ where
     T: Send + 'static,
     F: FnOnce(&AppState) -> AppResult<T> + Send + 'static,
 {
-    tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
-        .await
-        .map_err(|e| crate::error::task_failed("dọn rác", e))?
+    super::blocking(app, "dọn rác", f).await
 }
 
 /// Quét theo rule. Tiến độ gửi qua `on_progress` (~10 lần/giây).

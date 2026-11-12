@@ -3,6 +3,10 @@
 #
 # Ký số (tuỳ chọn): nếu repo có secret SIGNING_PFX_BASE64 + SIGNING_PFX_PASSWORD (tạo bằng
 # scripts/new-ci-signing-cert.ps1), bộ cài được ký bằng chứng chỉ tự ký đó; không có thì phát hành bản chưa ký.
+#
+# Tự cập nhật (tuỳ chọn): nếu repo có secret TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD,
+# tạo bằng scripts/new-updater-key.ps1), CI ký bộ cài bằng khoá minisign đó và đăng thêm latest.json — app đã cài
+# đọc file này để thấy bản mới. Không có secret => phát hành như cũ, app không tự cập nhật lên bản này được.
 name: Release
 
 on:
@@ -18,6 +22,7 @@ jobs:
     runs-on: windows-latest
     env:
       HAS_CERT: ${{ secrets.SIGNING_PFX_BASE64 != '' }}
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -69,13 +74,22 @@ jobs:
           Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw | Out-Null
           Remove-Item $pfx -Force
 
-      - name: Build bộ cài (có ký)
-        if: env.HAS_CERT == 'true'
-        run: npm run build:signed
-
-      - name: Build bộ cài (chưa ký)
-        if: env.HAS_CERT != 'true'
-        run: npm run tauri build
+      - name: Build bộ cài
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $cfg = @()
+          if ($env:HAS_CERT -eq 'true') { $cfg += @('--config', 'src-tauri/tauri.sign.conf.json') }
+          if ($env:HAS_UPDATER_KEY -eq 'true') {
+            # Khoá công khai trong tauri.conf.json phải là của khoá riêng này (app đã cài dùng nó để kiểm chữ ký).
+            $pub = (Get-Content src-tauri/tauri.conf.json -Raw -Encoding utf8 | ConvertFrom-Json).plugins.updater.pubkey
+            if (-not $pub -or $pub -like '*CHUA_CO_KHOA*') { throw "Có secret TAURI_SIGNING_PRIVATE_KEY nhưng tauri.conf.json chưa có pubkey — chạy scripts/new-updater-key.ps1 rồi commit." }
+            $cfg += @('--config', 'src-tauri/tauri.updater.conf.json')
+          }
+          npx tauri build @cfg
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Tạo Release
         shell: pwsh
@@ -110,4 +124,27 @@ jobs:
           $changes = if ($m.Success) { "## Có gì mới`n`n" + $m.Groups[1].Value.Trim() + "`n`n" } else { "" }
           $notesFile = Join-Path $env:RUNNER_TEMP "notes.md"
           [IO.File]::WriteAllText($notesFile, $changes + ($notes -replace '(?m)^          ', ''))
-          gh release create $tag $asset --title "PC Manager $tag" --notes-file $notesFile --generate-notes --verify-tag
+          $assets = @($asset)
+          # latest.json cho trình cập nhật trong app: phiên bản, "Có gì mới", link bộ cài và chữ ký minisign của nó.
+          $sig = Get-ChildItem "src-tauri/target/release/bundle/nsis/*_x64-setup.exe.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($sig) {
+            $relNotes = ""
+            if ($m.Success) { $relNotes = $m.Groups[1].Value.Trim() }
+            $latest = [ordered]@{
+              version   = $ver
+              notes     = $relNotes
+              pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              platforms = [ordered]@{
+                "windows-x86_64" = [ordered]@{
+                  signature = (Get-Content $sig.FullName -Raw).Trim()
+                  url       = "https://github.com/${{ github.repository }}/releases/download/$tag/PC-Manager_${ver}_x64-setup.exe"
+                }
+              }
+            }
+            $latestFile = Join-Path $env:RUNNER_TEMP "latest.json"
+            [IO.File]::WriteAllText($latestFile, ($latest | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
+            $assets += $latestFile
+          } else {
+            Write-Host "::warning::Không có chữ ký cập nhật (thiếu secret TAURI_SIGNING_PRIVATE_KEY) — bản này không có latest.json."
+          }
+          gh release create $tag @assets --title "PC Manager $tag" --notes-file $notesFile --generate-notes --verify-tag

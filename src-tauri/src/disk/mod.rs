@@ -115,6 +115,8 @@ pub struct RecycleReport {
     pub recycled_bytes: u64,
     pub failed: u32,
     pub items: Vec<RecycleOutcome>,
+    /// Bị huỷ giữa chừng (các file chưa xử lý không có trong `items`).
+    pub cancelled: bool,
 }
 
 pub fn drives() -> Vec<DriveInfo> {
@@ -437,7 +439,9 @@ impl DiskManager {
     }
 
     /// Chuyển các file đã chọn vào Thùng rác. Với nhóm trùng: luôn giữ lại ít nhất 1 bản.
-    pub fn recycle(&self, store: &Store, scan_id: u64, ids: &[u32]) -> AppResult<RecycleReport> {
+    /// Chuyển file đã chọn vào Thùng rác. Tiến độ: `phase = "recycle"`, `done/total` = số file đã xử lý.
+    /// Huỷ giữa chừng: file đã chuyển giữ nguyên trong Thùng rác, phần còn lại không đụng tới.
+    pub fn recycle(&self, store: &Store, scan_id: u64, ids: &[u32], on_progress: &dyn Fn(DiskProgress)) -> AppResult<RecycleReport> {
         let _g = self.begin()?;
         let scan = {
             let mut last = self.last.lock_recover();
@@ -452,8 +456,14 @@ impl DiskManager {
         let guard = DiskGuard::from_env();
         let selected: Vec<(u32, &Stored)> = ids.iter().filter_map(|id| scan.files.get(id).map(|s| (*id, s))).collect();
         let refused = keep_one_per_group(&scan.files, ids);
-        let mut report = RecycleReport { recycled: 0, recycled_bytes: 0, failed: 0, items: Vec::new() };
-        for (id, f) in selected {
+        let mut report = RecycleReport { recycled: 0, recycled_bytes: 0, failed: 0, items: Vec::new(), cancelled: false };
+        let total = selected.len() as u64;
+        for (i, (id, f)) in selected.into_iter().enumerate() {
+            if self.cancel.load(Ordering::Relaxed) {
+                report.cancelled = true;
+                break;
+            }
+            on_progress(DiskProgress { phase: "recycle", files: report.recycled.into(), bytes: report.recycled_bytes, done: i as u64, total });
             let result = if refused.contains(&id) {
                 Err("phải giữ lại ít nhất một bản trong nhóm".to_owned())
             } else {
@@ -609,11 +619,11 @@ mod tests {
         let ids: Vec<u32> = dups.groups[0].files.iter().map(|f| f.id).collect();
         let first = ids[0];
         std::fs::write(dir.join("sub").join("big-copy.bin"), vec![2u8; 300_001]).unwrap(); // đổi size => bản còn lại cũng bị từ chối
-        let r = m.recycle(&store, dups.scan_id, &ids).unwrap();
+        let r = m.recycle(&store, dups.scan_id, &ids, &|_| {}).unwrap();
         assert_eq!(r.recycled, 0);
         assert!(r.items.iter().any(|o| o.id == first && o.message.as_deref() == Some("phải giữ lại ít nhất một bản trong nhóm")));
         assert!(dir.join("big.bin").exists() && dir.join("sub").join("big-copy.bin").exists());
-        assert!(m.recycle(&store, 999, &[0]).is_err(), "scan id sai");
+        assert!(m.recycle(&store, 999, &[0], &|_| {}).is_err(), "scan id sai");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

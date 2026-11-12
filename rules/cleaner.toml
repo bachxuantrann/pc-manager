@@ -142,12 +142,16 @@ requires_admin = true
 id = "chrome-cache"
 name = "Cache Google Chrome"
 group = "Trình duyệt"
-description = "Ảnh, script đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie hay phiên đăng nhập."
+description = "Ảnh, script, shader đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie, phiên đăng nhập hay dữ liệu trang web (IndexedDB, Local Storage)."
 risk = "low"
+# KHÔNG thêm "Service Worker\Database", "IndexedDB", "Local Storage": đó là dữ liệu của trang web.
 paths = [
   "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Cache",
   "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Code Cache",
   "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\GPUCache",
+  "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Service Worker\\CacheStorage",
+  "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\ShaderCache",
+  "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\GrShaderCache",
 ]
 min_age_hours = 0
 remove_empty_dirs = true
@@ -157,16 +161,100 @@ skip_if_running = ["chrome.exe"]
 id = "edge-cache"
 name = "Cache Microsoft Edge"
 group = "Trình duyệt"
-description = "Ảnh, script đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie hay phiên đăng nhập."
+description = "Ảnh, script, shader đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie, phiên đăng nhập hay dữ liệu trang web (IndexedDB, Local Storage)."
 risk = "low"
 paths = [
   "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Cache",
   "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Code Cache",
   "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\GPUCache",
+  "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Service Worker\\CacheStorage",
+  "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\ShaderCache",
+  "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\GrShaderCache",
 ]
 min_age_hours = 0
 remove_empty_dirs = true
 skip_if_running = ["msedge.exe"]
+
+[[rule]]
+id = "brave-cache"
+name = "Cache Brave"
+group = "Trình duyệt"
+description = "Ảnh, script, shader đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie, phiên đăng nhập hay dữ liệu trang web (IndexedDB, Local Storage)."
+risk = "low"
+paths = [
+  "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Cache",
+  "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Code Cache",
+  "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\GPUCache",
+  "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Service Worker\\CacheStorage",
+  "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\ShaderCache",
+  "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\GrShaderCache",
+]
+min_age_hours = 0
+remove_empty_dirs = true
+skip_if_running = ["brave.exe"]
+
+[[rule]]
+id = "vivaldi-cache"
+name = "Cache Vivaldi"
+group = "Trình duyệt"
+description = "Ảnh, script, shader đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie, phiên đăng nhập hay dữ liệu trang web (IndexedDB, Local Storage)."
+risk = "low"
+paths = [
+  "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Cache",
+  "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Code Cache",
+  "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\GPUCache",
+  "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Service Worker\\CacheStorage",
+  "%LOCALAPPDATA%\\Vivaldi\\User Data\\ShaderCache",
+  "%LOCALAPPDATA%\\Vivaldi\\User Data\\GrShaderCache",
+]
+min_age_hours = 0
+remove_empty_dirs = true
+skip_if_running = ["vivaldi.exe"]
+
+[[rule]]
+id = "coccoc-cache"
+name = "Cache Cốc Cốc"
+group = "Trình duyệt"
+description = "Ảnh, script, shader đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie, phiên đăng nhập hay dữ liệu trang web (IndexedDB, Local Storage)."
+risk = "low"
+paths = [
+  "%LOCALAPPDATA%\\CocCoc\\Browser\\User Data\\*\\Cache",
+  "%LOCALAPPDATA%\\CocCoc\\Browser\\User Data\\*\\Code Cache",
+  "%LOCALAPPDATA%\\CocCoc\\Browser\\User Data\\*\\GPUCache",
+  "%LOCALAPPDATA%\\CocCoc\\Browser\\User Data\\*\\Service Worker\\CacheStorage",
+  "%LOCALAPPDATA%\\CocCoc\\Browser\\User Data\\ShaderCache",
+  "%LOCALAPPDATA%\\CocCoc\\Browser\\User Data\\GrShaderCache",
+]
+min_age_hours = 0
+remove_empty_dirs = true
+# Tiến trình của Cốc Cốc tên là browser.exe.
+skip_if_running = ["browser.exe"]
+
+[[rule]]
+id = "opera-cache"
+name = "Cache Opera / Opera GX"
+group = "Trình duyệt"
+description = "Ảnh, script, shader đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie, phiên đăng nhập hay dữ liệu trang web (IndexedDB, Local Storage)."
+risk = "low"
+# Opera: cache ở %LOCALAPPDATA% (bản cũ ngay trong thư mục profile, bản mới theo từng profile như Chromium),
+# Code/GPU/shader cache ở %APPDATA%. Đường dẫn không tồn tại được bỏ qua.
+paths = [
+  "%LOCALAPPDATA%\\Opera Software\\Opera Stable\\Cache",
+  "%LOCALAPPDATA%\\Opera Software\\Opera Stable\\*\\Cache",
+  "%LOCALAPPDATA%\\Opera Software\\Opera GX Stable\\Cache",
+  "%LOCALAPPDATA%\\Opera Software\\Opera GX Stable\\*\\Cache",
+  "%APPDATA%\\Opera Software\\Opera Stable\\Code Cache",
+  "%APPDATA%\\Opera Software\\Opera Stable\\GPUCache",
+  "%APPDATA%\\Opera Software\\Opera Stable\\ShaderCache",
+  "%APPDATA%\\Opera Software\\Opera Stable\\Service Worker\\CacheStorage",
+  "%APPDATA%\\Opera Software\\Opera GX Stable\\Code Cache",
+  "%APPDATA%\\Opera Software\\Opera GX Stable\\GPUCache",
+  "%APPDATA%\\Opera Software\\Opera GX Stable\\ShaderCache",
+  "%APPDATA%\\Opera Software\\Opera GX Stable\\Service Worker\\CacheStorage",
+]
+min_age_hours = 0
+remove_empty_dirs = true
+skip_if_running = ["opera.exe"]
 
 [[rule]]
 id = "firefox-cache"
@@ -174,7 +262,10 @@ name = "Cache Firefox"
 group = "Trình duyệt"
 description = "Ảnh, script đã tải của các trang web. Không đụng tới mật khẩu, lịch sử, cookie hay phiên đăng nhập."
 risk = "low"
-paths = ["%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache2"]
+paths = [
+  "%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache2",
+  "%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\startupCache",
+]
 min_age_hours = 0
 remove_empty_dirs = true
 skip_if_running = ["firefox.exe"]
@@ -185,8 +276,10 @@ skip_if_running = ["firefox.exe"]
 id = "windows-update-cache"
 name = "Bản cập nhật Windows đã tải"
 group = "Windows Update"
-description = "File cập nhật đã cài xong. Dịch vụ Windows Update được tạm dừng trong lúc dọn rồi chạy lại."
+description = "File cập nhật đã tải (đã cài hoặc đang chờ cài). Windows sẽ tải lại bản chưa cài. Dịch vụ Windows Update được tạm dừng trong lúc dọn rồi chạy lại."
 risk = "medium"
+# Không chọn sẵn: có cả bản đã tải nhưng CHƯA cài — xoá thì Windows phải tải lại.
+default_selected = false
 paths = ["%SystemRoot%\\SoftwareDistribution\\Download"]
 min_age_hours = 24
 remove_empty_dirs = true

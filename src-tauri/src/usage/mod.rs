@@ -5,6 +5,7 @@
 
 pub mod installed;
 pub mod leftovers;
+pub mod packages;
 pub mod prefetch;
 pub mod sampler;
 pub mod userassist;
@@ -47,6 +48,8 @@ pub struct AppInfo {
     pub last_used_ms: Option<i64>,
     pub last_used_source: Option<UsageSource>,
     pub can_uninstall: bool,
+    /// App Store (MSIX): chỉ xem, gỡ trong Windows Settings.
+    pub store_app: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -204,7 +207,8 @@ pub struct AppsProgress {
 }
 
 pub fn list(store: &Store, on_progress: &(dyn Fn(AppsProgress) + Sync)) -> AppResult<AppsOverview> {
-    let apps = installed::list();
+    let mut apps = installed::list();
+    apps.extend(packages::list());
     let total = apps.len();
     on_progress(AppsProgress { done: 0, total });
     let ua = userassist::read();
@@ -289,6 +293,7 @@ fn app_info(a: &Installed, index: &UsageIndex, deadline: Instant) -> AppInfo {
         last_used_ms: used.map(|u| u.0),
         last_used_source: used.map(|u| u.1),
         can_uninstall: !a.no_remove && a.uninstall.is_some(),
+        store_app: a.id.starts_with(packages::ID_PREFIX),
     }
 }
 
@@ -336,6 +341,24 @@ pub struct Started {
 /// Windows: chương trình yêu cầu quyền admin mà tiến trình gọi chưa có.
 const ERROR_ELEVATION_REQUIRED: i32 = 740;
 
+/// Cách chạy trình gỡ.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LaunchRoute {
+    /// Chạy thẳng từ tiến trình này (740 => qua UAC).
+    Direct,
+    /// Chạy dưới user đang đăng nhập, quyền thường (cha = Explorer).
+    ShellUser,
+}
+
+/// App cài riêng cho user (HKCU) không bao giờ được gỡ bằng token admin của PC Manager.
+fn launch_route(id: &str, elevated: bool, other_user: bool) -> LaunchRoute {
+    if id.starts_with("HKCU\\") && (elevated || other_user) {
+        LaunchRoute::ShellUser
+    } else {
+        LaunchRoute::Direct
+    }
+}
+
 /// Mở trình gỡ cài đặt của app `id`. Lệnh luôn đọc lại từ registry, không nhận từ UI.
 pub fn uninstall(store: &Store, id: &str) -> AppResult<Started> {
     let app = installed::find(id).ok_or_else(|| AppError::NotFound("ứng dụng không còn trong danh sách".into()))?;
@@ -355,14 +378,32 @@ pub fn uninstall(store: &Store, id: &str) -> AppResult<Started> {
             )));
         }
         let shown = format!("{} {}", cmd.program.display(), cmd.args);
-        // App cài riêng cho user (HKCU) khi app đang được nâng quyền bằng tài khoản admin khác:
-        // trình gỡ phải chạy dưới chính người dùng đang đăng nhập (chạy dưới admin nó sẽ tìm
-        // file/registry trong profile của admin và gỡ hỏng). App cài cho user không cần quyền admin để gỡ.
-        if app.id.starts_with("HKCU\\") && crate::user::is_other_user() {
-            let pid = crate::sys::launch::spawn_as_shell_user(&cmd.program, &cmd.args, &crate::user::environment(), 0)
-                .map_err(|e| AppError::Other(format!("không chạy được trình gỡ dưới tài khoản của bạn: {}", e.message())))?;
+        // App cài riêng cho user (HKCU) mà PC Manager đang có quyền admin (cùng hay khác tài khoản):
+        // trình gỡ PHẢI chạy dưới user đang đăng nhập với quyền thường (token của Explorer), như Windows
+        // Settings vẫn làm. HKCU ghi được bởi mọi chương trình quyền thường => chạy UninstallString ở đây
+        // bằng token admin là đường leo thang đặc quyền. Khác tài khoản: chạy dưới admin còn gỡ hỏng (tìm
+        // file/registry trong profile của admin). Lỗi thì báo, KHÔNG quay về chạy bằng token admin.
+        let elevated = crate::sys::token::is_elevated().unwrap_or(true);
+        if launch_route(&app.id, elevated, crate::user::is_other_user()) == LaunchRoute::ShellUser {
+            let pid = match crate::sys::launch::spawn_as_shell_user(&cmd.program, &cmd.args, &crate::user::environment(), 0) {
+                Ok(pid) => pid,
+                Err(e) if e.code() == windows::core::HRESULT::from_win32(ERROR_ELEVATION_REQUIRED as u32) => {
+                    return Err(AppError::Forbidden(format!(
+                        "trình gỡ của {} (cài riêng cho người dùng) đòi quyền Administrator. Vì an toàn, PC Manager \
+                         không chạy nó bằng quyền admin của mình — hãy mở lại PC Manager ở quyền thường rồi gỡ \
+                         (Windows sẽ hỏi UAC), hoặc gỡ trong Settings → Apps",
+                        app.name
+                    )));
+                }
+                Err(e) => {
+                    return Err(AppError::Other(format!(
+                        "không chạy được trình gỡ dưới quyền thường của tài khoản đang đăng nhập: {}",
+                        e.message()
+                    )))
+                }
+            };
             let who = crate::user::other_account().unwrap_or("người dùng đang đăng nhập");
-            return Ok((format!("{shown} (chạy dưới {who})"), pid));
+            return Ok((format!("{shown} (chạy dưới {who}, quyền thường)"), pid));
         }
         match std::process::Command::new(&cmd.program).raw_arg(&cmd.args).spawn() {
             Ok(child) => Ok((shown, child.id())),
@@ -469,6 +510,15 @@ pub fn wait_uninstall(pid: u32, started_at: SystemTime, timeout: Duration) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn per_user_uninstaller_never_runs_with_admin_token() {
+        assert_eq!(launch_route(r"HKCU\X", true, false), LaunchRoute::ShellUser, "cùng tài khoản, đang admin");
+        assert_eq!(launch_route(r"HKCU\X", true, true), LaunchRoute::ShellUser, "khác tài khoản");
+        assert_eq!(launch_route(r"HKCU\X", false, false), LaunchRoute::Direct, "quyền thường: chạy thẳng");
+        assert_eq!(launch_route(r"HKLM\X", true, false), LaunchRoute::Direct);
+        assert_eq!(launch_route(r"HKLM\X", false, false), LaunchRoute::Direct);
+    }
 
     fn sys32() -> PathBuf {
         PathBuf::from(r"C:\Windows\System32")

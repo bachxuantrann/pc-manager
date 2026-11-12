@@ -78,6 +78,16 @@ pub struct LeftoverOutcome {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LeftoverProgress {
+    /// Số mục đã xử lý / tổng số mục được chọn.
+    pub done: u32,
+    pub total: u32,
+    /// Mục đang xử lý (đường dẫn hoặc key registry).
+    pub current: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LeftoverReport {
     pub recycled: u32,
     pub recycled_bytes: u64,
@@ -638,7 +648,7 @@ impl LeftoverManager {
     }
 
     /// Dọn các mục `ids` của lần quét `scan_id` (dùng một lần).
-    pub fn clean(&self, store: &Store, scan_id: u64, ids: &[u32]) -> AppResult<LeftoverReport> {
+    pub fn clean(&self, store: &Store, scan_id: u64, ids: &[u32], on_progress: &dyn Fn(LeftoverProgress)) -> AppResult<LeftoverReport> {
         let stored = {
             let mut g = self.stored.lock_recover();
             match g.take() {
@@ -654,9 +664,16 @@ impl LeftoverManager {
         let mut report = LeftoverReport { recycled: 0, recycled_bytes: 0, registry_removed: false, backup: None, failed: 0, items: Vec::new() };
         let selected: Vec<&Item> = stored.items.iter().filter(|i| ids.contains(&i.info.id)).collect();
         let mut install_failed = false;
+        let total = selected.len() as u32;
+        let mut done = 0u32;
+        let mut step = |current: &str| {
+            on_progress(LeftoverProgress { done, total, current: current.to_owned() });
+            done += 1;
+        };
 
         for item in selected.iter().filter(|i| i.path.is_some()) {
             let Some(path) = item.path.as_deref() else { continue };
+            step(&item.info.path);
             let result = recycle_checked(&guard, item, path);
             let ok = result.is_ok();
             store.log_action_best_effort("app.leftover.recycle", &item.info.path, ok, result.as_ref().err().map_or("", String::as_str));
@@ -671,6 +688,7 @@ impl LeftoverManager {
         }
 
         if let Some(reg) = selected.iter().find(|i| i.info.kind == LeftoverKind::Registry) {
+            step(&reg.info.path);
             let result = if install_failed {
                 Err("giữ lại vì thư mục cài chưa dọn được".to_owned())
             } else {

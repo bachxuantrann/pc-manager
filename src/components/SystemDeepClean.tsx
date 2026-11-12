@@ -12,13 +12,10 @@ import ProgressBar from "./ProgressBar";
 
 type Busy = null | "analyze" | "winsxs" | "winold";
 
-/** Dưới mức này coi như không lấy lại được gì (chương trình khác vẫn ghi/xoá file trong lúc dọn). */
-const NOTHING_FREED = 16 * 1024 * 1024;
-
 function freedText(r: SystemCleanReport, what: "winsxs" | "winold"): string {
   const secs = Math.max(1, Math.round(r.durationMs / 1000));
   const reboot = r.rebootRequired ? " Cần khởi động lại máy để hoàn tất." : "";
-  if (r.freedBytes >= NOTHING_FREED) return `Xong sau ${secs} giây — giải phóng khoảng ${formatBytes(r.freedBytes)}.${reboot}`;
+  if (!r.nothingFreed) return `Xong sau ${secs} giây — giải phóng khoảng ${formatBytes(r.freedBytes)}.${reboot}`;
   if (what === "winsxs") {
     // DISM trả "thành công" ngay cả khi không còn gì để dọn (vd. vừa dọn xong lần trước).
     if (r.rebootRequired)

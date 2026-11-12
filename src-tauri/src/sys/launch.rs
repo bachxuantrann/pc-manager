@@ -170,7 +170,9 @@ mod tests {
     #[test]
     fn runs_under_explorer_with_given_environment() {
         // Cùng user: tiến trình con có cha là Explorer và nhận đúng biến môi trường truyền vào.
-        let dir = std::env::temp_dir().join(format!("pcm-launch-{}", std::process::id()));
+        // %TEMP% của user đang đăng nhập: tiến trình con chạy dưới user đó phải ghi được vào đây.
+        let temp = crate::user::env("TEMP").map_or_else(std::env::temp_dir, std::path::PathBuf::from);
+        let dir = temp.join(format!("pcm-launch-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join("out.txt");
         let mut env: Vec<(String, String)> = std::env::vars().collect();

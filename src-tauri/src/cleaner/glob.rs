@@ -2,11 +2,17 @@
 //! không phân biệt hoa thường. Không hỗ trợ `**` hay `[...]` — cố ý tối giản.
 
 pub fn matches(pattern: &str, name: &str) -> bool {
+    matches_lower(&pattern.to_lowercase(), name)
+}
+
+/// Như `matches` nhưng `pattern` đã viết thường sẵn (rule hạ chữ thường mẫu một lần lúc nạp,
+/// không phải ở mỗi file).
+pub fn matches_lower(pattern: &str, name: &str) -> bool {
     // Mẫu mặc định của hầu hết rule: khớp mọi tên, không cần cấp phát cho từng file.
     if pattern == "*" {
         return true;
     }
-    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let p: Vec<char> = pattern.chars().collect();
     let n: Vec<char> = name.to_lowercase().chars().collect();
     // Thuật toán tham lam với backtrack 1 điểm (O(n*m) xấu nhất, không đệ quy).
     let (mut pi, mut ni) = (0usize, 0usize);

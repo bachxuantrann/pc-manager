@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::error::{AppError, AppResult};
 use crate::settings::{self, AutoClean};
@@ -32,9 +32,7 @@ where
     T: Send + 'static,
     F: FnOnce(&AppState) -> AppResult<T> + Send + 'static,
 {
-    tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
-        .await
-        .map_err(|e| crate::error::task_failed("đọc/lưu cài đặt", e))?
+    super::blocking(app, "đọc/lưu cài đặt", f).await
 }
 
 #[tauri::command]

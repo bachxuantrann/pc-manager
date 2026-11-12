@@ -26,6 +26,15 @@ pub fn is_protected(normed: &str) -> bool {
     list.iter().any(|w| normed == w || normed.strip_prefix(w.as_str()).is_some_and(|r| r.starts_with('\\')))
 }
 
+/// Mục whitelist là con TRỰC TIẾP của thư mục `dir` (đã `norm`) — cho kiểm tra cấm theo thư mục.
+pub fn protected_children(dir: &str) -> Vec<String> {
+    let list = WHITELIST.read().unwrap_or_else(|e| e.into_inner());
+    list.iter()
+        .filter(|w| w.strip_prefix(dir).and_then(|r| r.strip_prefix('\\')).is_some_and(|n| !n.is_empty() && !n.contains('\\')))
+        .cloned()
+        .collect()
+}
+
 fn validate_whitelist_path(p: &str) -> Result<String, String> {
     let p = p.trim().trim_matches('"').trim_end_matches(['\\', '/']);
     let path = Path::new(p);
@@ -100,8 +109,9 @@ impl Default for AutoClean {
     }
 }
 
+/// Thời điểm hiện tại, unix ms (dùng chung cho cả app).
 pub fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 impl AutoClean {
@@ -144,8 +154,9 @@ fn run_schtasks(args: &[&str]) -> AppResult<std::process::Output> {
     Ok(out)
 }
 
+/// Đọc qua COM `ITaskService` (không sinh `schtasks.exe` mỗi lần mở trang Cài đặt); tạo/xoá vẫn dùng schtasks.
 pub fn autostart_enabled() -> bool {
-    run_schtasks(&["/Query", "/TN", TASK_NAME]).is_ok_and(|o| o.status.success())
+    crate::sys::com::ComGuard::init().is_ok_and(|com| crate::sys::tasks::task_exists(&com, TASK_NAME))
 }
 
 /// Bỏ tiền tố `\\?\` mà `canonicalize` thêm vào, giữ nguyên hoa/thường.

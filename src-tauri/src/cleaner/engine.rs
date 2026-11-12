@@ -91,6 +91,8 @@ pub fn scan(rule: &Rule, roots: Vec<PathBuf>, bans: &BanList, now: SystemTime, c
                 out.read_errors += 1;
                 continue;
             };
+            // Danh sách cấm tính một lần cho cả thư mục; bước kiểm tra lại trước khi xoá vẫn từng file.
+            let dir_bans = bans.for_dir(&dir);
             for entry in rd {
                 let Ok(entry) = entry else {
                     out.read_errors += 1;
@@ -116,7 +118,7 @@ pub fn scan(rule: &Rule, roots: Vec<PathBuf>, bans: &BanList, now: SystemTime, c
                 if !meta.is_file() || !rule.file_matches(&entry.file_name().to_string_lossy()) {
                     continue;
                 }
-                if bans.check(&path).is_some() {
+                if dir_bans.check_file(&path).is_some() {
                     out.skipped_banned += 1;
                     continue;
                 }
@@ -185,6 +187,7 @@ fn recheck(f: &Found, rule: &Rule, roots: &[PathBuf], bans: &BanList, now: Syste
 }
 
 /// Xoá (hoặc giả lập nếu `dry_run`) đúng các file đã quét, sau khi kiểm tra lại từng file.
+#[allow(clippy::too_many_arguments)]
 pub fn delete(
     rule: &Rule,
     data: &RuleScanData,
@@ -193,9 +196,14 @@ pub fn delete(
     dry_run: bool,
     cancel: &AtomicBool,
     c: &Counters,
+    tick: &dyn Fn(),
 ) -> DeleteStats {
     let mut st = DeleteStats::default();
-    for f in &data.files {
+    for (i, f) in data.files.iter().enumerate() {
+        // Báo tiến độ theo số file (rule 100.000 file thì thanh vẫn chạy); `tick` tự giới hạn tần suất.
+        if i % 256 == 255 {
+            tick();
+        }
         if cancel.load(Ordering::Relaxed) {
             break;
         }

@@ -11,6 +11,14 @@ checks, project layout and the release process.
 - Visual Studio 2022 Build Tools with the *Desktop development with C++* workload and a Windows SDK
 - Microsoft Edge WebView2 Runtime
 
+### Máy mới (ghi chú cho agent / máy Windows mới)
+
+- Cài bằng winget: `winget install --id Rustlang.Rustup -e`, rồi
+  `winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"` (UAC hỏi một lần).
+- Bash của Claude Code chưa có `cargo` trong PATH sau khi cài: `export PATH="$PATH:$USERPROFILE/.cargo/bin"`.
+- `npm ci` → `npm run tauri dev`. Máy chưa chắc có `gh`, Python: dùng `node` (có `node:sqlite` để đọc DB của app khi cần chẩn đoán).
+- `.claude/launch.json` có cấu hình `vite` (dev, cổng 1420) và `vite-prod` (bản build, cổng 4173) để xem giao diện.
+
 ## Getting started
 
 ```powershell
@@ -125,6 +133,15 @@ To publish a release:
    ```
 
 The workflow fails if the tag does not match the version in `package.json`.
+
+**Auto-update (one time):** run `.scripts
+ew-updater-key.ps1`. It creates a minisign key pair
+(private key in `%USERPROFILE%.tauri`, never in the repo), writes the public key into
+`src-tauri/tauri.conf.json` (commit it) and stores the private key + password in the repository secrets
+`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (or tells you how to add them on GitHub).
+With these secrets the Release workflow also publishes `latest.json`, which installed copies read to offer
+the update. Back up the private key: losing it means existing installs cannot auto-update to releases
+signed with a new key.
 
 **Signing in CI (optional):** run `.\scripts\new-ci-signing-cert.ps1` once (requires
 `gh auth login`). It creates a separate self-signed certificate, stores it in the repository

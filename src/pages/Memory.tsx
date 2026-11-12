@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PageShell from "../components/PageShell";
 import BoostPanel, { MEMORY_SETTINGS_CHANGED } from "../components/BoostPanel";
 import UsageChart from "../components/UsageChart";
@@ -40,18 +40,30 @@ function Composition({ s }: { s: MemoryStatus }) {
 
 export function SmartSettings() {
   const [s, setS] = useState<MemorySettings | null>(null);
+  /** Bản đang lưu ở backend — thanh trượt chỉ lưu (và ghi nhật ký) khi giá trị thật sự đổi. */
+  const stored = useRef<MemorySettings | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api.memorySettings().then(setS).catch((e) => setErr(errorMessage(e)));
+    api
+      .memorySettings()
+      .then((v) => {
+        stored.current = v;
+        setS(v);
+      })
+      .catch((e) => setErr(errorMessage(e)));
   }, []);
 
   const save = async (next: MemorySettings) => {
     setS(next);
+    const cur = stored.current;
+    if (cur && cur.smartThresholdPct === next.smartThresholdPct && cur.smartAuto === next.smartAuto) return;
     setErr(null);
     try {
-      setS(await api.setMemorySettings(next));
+      const v = await api.setMemorySettings(next);
+      stored.current = v;
+      setS(v);
       window.dispatchEvent(new Event(MEMORY_SETTINGS_CHANGED));
       setSaved("Đã lưu");
       window.setTimeout(() => setSaved(null), 1500);

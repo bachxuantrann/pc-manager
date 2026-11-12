@@ -151,7 +151,7 @@ pub fn enumerate() -> windows::core::Result<Vec<RawProcess>> {
 
 /// Phân tích buffer. `base_addr` là địa chỉ gốc của buffer kernel đã ghi —
 /// con trỏ `ImageName.Buffer` trỏ vào vùng đó, ta quy đổi về offset trong
-/// `bytes` và kiểm tra biên trước khi đọc (unsafe-checker ffi-15).
+/// `bytes` và kiểm tra biên trước khi đọc: dữ liệu từ hệ điều hành không được tin là luôn hợp lệ.
 fn parse(bytes: &[u8], base_addr: usize) -> Vec<RawProcess> {
     let mut out = Vec::with_capacity(400);
     let mut offset = 0usize;

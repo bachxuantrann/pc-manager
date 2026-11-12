@@ -87,6 +87,11 @@ confirmation; every check above still applies.
 
 - Uninstall runs **the app's own uninstaller** (`UninstallString`, re-read from the registry, absolute
   paths only). When it finishes, PC Manager looks for leftovers.
+- Apps installed for the current user only (`HKCU`) are always uninstalled **as the signed-in user
+  without administrator rights**, even when PC Manager runs as administrator — any standard program can
+  change their uninstall command, so running it elevated would be a privilege-escalation path. If such an
+  uninstaller cannot start that way, PC Manager reports an error instead of falling back to admin rights.
+- Microsoft Store apps are listed read-only; they are uninstalled from Windows Settings.
 - **Leftover cleanup:** the backend finds the install folder, AppData/ProgramData folders matching the
   app name, Start-menu shortcuts pointing into the install folder, and the `Uninstall` registry key.
   Partial name matches ("possible") are not selected by default. It never selects:
@@ -118,7 +123,7 @@ target, result. See **Settings → Activity log**.
   Cache of frequently used apps is kept.
 - **Deep Boost:** drops the **entire** standby list. "Free" memory rises sharply but **available memory
   barely changes** (standby pages already count as available), and apps start **more slowly** next time.
-- **Smart Boost:** runs only when available memory is below a threshold (15% by default).
+- **Smart Boost:** runs only when available memory is below a threshold (15% by default), and uses the light Boost (deep Boost would only discard cache).
 - Each report separates "available memory gained" (the real benefit) from "cache cleared".
 - **Trim working set** applies only to processes you choose, never in bulk. Windows manages memory
   well; trimming helps only occasionally, and pages are reloaded when the app needs them.

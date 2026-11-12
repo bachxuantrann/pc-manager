@@ -124,9 +124,11 @@ fn memory(s: &Snapshot, out: &mut Vec<Finding>) {
     let free_pct = pct(s.mem_avail, s.mem_total);
     let m = format!("còn trống {free_pct}% ({})", fmt_bytes(s.mem_avail));
     let f = match free_pct {
-        0..10 => finding("ram", Category::Memory, Severity::Critical, "RAM gần hết", "Máy có thể chậm, giật hoặc treo app. Boost giải phóng cache; đóng bớt app nặng (xem Tiến trình).")
-            .action(Some(Action::Boost)),
-        10..20 => finding("ram", Category::Memory, Severity::Warn, "RAM đang dùng nhiều", "Boost giải phóng cache không cần thiết; nếu thường xuyên thế này, xem app nào đang chiếm nhiều RAM.")
+        // RAM thật sự thiếu: cache (standby) khi ấy vốn đã nhỏ — cách duy nhất có tác dụng là đóng bớt app
+        // nặng. Boost (nhẹ) chỉ ghi trang modified xuống đĩa, là phụ.
+        0..10 => finding("ram", Category::Memory, Severity::Critical, "RAM gần hết", "Máy có thể chậm, giật hoặc treo app. Đóng bớt app đang chiếm nhiều RAM (mở Tiến trình, sắp xếp theo RAM). Boost chỉ giúp thêm chút ít.")
+            .action(open("processes", "Mở Tiến trình")),
+        10..20 => finding("ram", Category::Memory, Severity::Warn, "RAM đang dùng nhiều", "Boost ghi dữ liệu chờ (modified) xuống đĩa để trả lại RAM; nếu thường xuyên thế này, xem app nào đang chiếm nhiều RAM.")
             .action(Some(Action::Boost)),
         _ => finding("ram", Category::Memory, Severity::Ok, "RAM ổn", "Còn đủ bộ nhớ trống."),
     };
@@ -266,6 +268,17 @@ fn windows(s: &Snapshot, out: &mut Vec<Finding>) {
     }
 }
 
+/// Thanh RAM chạy chậm hơn mức hỗ trợ đáng kể (≥ 200 MT/s) => (đang chạy, tối đa). Chỉ xét RAM rời của
+/// máy bàn (`DIMM`): laptop (SODIMM/RAM hàn) hầu như không có XMP/EXPO, và nhiều firmware ghi `Speed` là
+/// mức tối đa của khe chứ không phải của thanh RAM => gợi ý sai.
+pub fn xmp_candidate(slots: &[&crate::hwinfo::smbios::MemorySlot]) -> Option<(u32, u32)> {
+    slots
+        .iter()
+        .filter(|m| m.form_factor.as_deref() == Some("DIMM"))
+        .filter_map(|m| Some((m.configured_mts?, m.speed_mts?)))
+        .find(|(now, max)| now < max && max - now >= 200)
+}
+
 fn hardware(s: &Snapshot, out: &mut Vec<Finding>) {
     let before = out.len();
     if let Some((now, max)) = s.ram_slow {
@@ -361,7 +374,8 @@ mod tests {
         let f = analyze(&s);
         assert_eq!(f[0].severity, Severity::Critical, "nặng nhất lên đầu");
         let ram = by_id(&f, "ram").unwrap();
-        assert_eq!((ram.severity, &ram.action), (Severity::Critical, &Some(Action::Boost)));
+        assert_eq!(ram.severity, Severity::Critical);
+        assert!(matches!(ram.action, Some(Action::Open { page: "processes", .. })), "RAM < 10%: đóng bớt app là hành động chính");
         let c = by_id(&f, "disk-system").unwrap();
         assert_eq!(c.severity, Severity::Critical, "C: còn 15/256 GB = 5% < 10%");
         assert!(matches!(c.action, Some(Action::Open { page: "cleaner", .. })));
@@ -411,6 +425,25 @@ mod tests {
         assert_eq!(by_id(&f, "ram-xmp").unwrap().metric.as_deref(), Some("2133 / 3200 MT/s"));
         assert!(by_id(&f, "hdd").is_some());
         assert!(by_id(&f, "ram-upgrade").is_some(), "RAM căng + còn khe trống");
+    }
+
+    #[test]
+    fn xmp_only_suggested_for_desktop_dimm() {
+        use crate::hwinfo::smbios::MemorySlot;
+        let slot = |ff: &str| MemorySlot {
+            size_mb: Some(8192),
+            speed_mts: Some(3200),
+            configured_mts: Some(2133),
+            form_factor: Some(ff.into()),
+            ..Default::default()
+        };
+        let (dimm, sodimm) = (slot("DIMM"), slot("SODIMM"));
+        assert_eq!(xmp_candidate(&[&sodimm]), None, "laptop: không gợi ý XMP");
+        assert_eq!(xmp_candidate(&[&dimm]), Some((2133, 3200)));
+        let unknown = MemorySlot { form_factor: None, ..slot("DIMM") };
+        assert_eq!(xmp_candidate(&[&unknown]), None, "không rõ loại thì không đoán");
+        let close = MemorySlot { configured_mts: Some(3100), ..slot("DIMM") };
+        assert_eq!(xmp_candidate(&[&close]), None, "chênh < 200 MT/s");
     }
 
     #[test]

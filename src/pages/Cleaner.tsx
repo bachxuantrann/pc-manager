@@ -1,3 +1,4 @@
+import { IconSparkle } from "../components/Icons";
 import { useReportBusy } from "../hooks/usePageActive";
 import { useJobResume } from "../hooks/useJobResume";
 import { useMemo, useState } from "react";
@@ -37,7 +38,14 @@ function statusNote(r: RuleScan): string | null {
 }
 
 function ProgressView({ p, onCancel, cancelling }: { p: CleanerProgress | null; onCancel: () => void; cancelling: boolean }) {
-  const pct = p && p.totalRules > 0 ? Math.round((p.doneRules / p.totalRules) * 100) : 0;
+  // Dọn: % theo số file (một rule 100.000 file thì thanh vẫn chạy); quét: theo số rule.
+  const pct = !p
+    ? 0
+    : p.phase === "clean" && p.totalFiles > 0
+      ? Math.min(100, Math.round((p.files / p.totalFiles) * 100))
+      : p.totalRules > 0
+        ? Math.round((p.doneRules / p.totalRules) * 100)
+        : 0;
   const verb = p?.phase === "clean" ? "Đang dọn" : "Đang quét";
   return (
     <Card className="flex flex-col gap-4">
@@ -318,7 +326,7 @@ export default function Cleaner() {
 
       {phase === "idle" && (
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
-          <div className="text-4xl">✦</div>
+          <IconSparkle className="h-10 w-10 text-accent" />
           <p className="max-w-lg text-sm opacity-70">
             Quét file tạm, cache trình duyệt, bản ghi lỗi, bản cập nhật Windows đã cài và Thùng rác. Không có gì bị xoá cho tới khi bạn
             xem trước và xác nhận.

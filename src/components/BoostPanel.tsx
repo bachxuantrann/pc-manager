@@ -180,7 +180,7 @@ export default function BoostPanel() {
           description={
             <>
               Chỉ chạy khi RAM khả dụng dưới ngưỡng{threshold != null && <> <b>{threshold}%</b></>}
-              {availablePct != null && <> · hiện còn <b>{availablePct.toFixed(0)}%</b></>}. Khi chạy sẽ xoá toàn bộ cache để ứng dụng có RAM ngay.
+              {availablePct != null && <> · hiện còn <b>{availablePct.toFixed(0)}%</b></>}. Chạy như Boost nhanh: ghi dữ liệu chờ xuống đĩa, giữ cache của app hay dùng.
             </>
           }
           result={results.smart}

@@ -5,6 +5,8 @@ import { ThemeContext, useThemePref } from "./lib/theme";
 import type { JobKind } from "./lib/api";
 import Sidebar, { type PageId } from "./components/Sidebar";
 import { MemoryFeedProvider } from "./hooks/useMemoryFeed";
+import { UpdateProvider } from "./hooks/useUpdate";
+import { UpdateBanner } from "./components/UpdatePanel";
 import { ElevationProvider } from "./components/Elevation";
 import Dashboard from "./pages/Dashboard";
 import SystemInfoPage from "./pages/SystemInfo";
@@ -41,6 +43,9 @@ const JOB_PAGE: Record<JobKind, PageId> = {
   "winold.clean": "cleaner",
   "disk.large": "disk",
   "disk.dups": "disk",
+  "disk.recycle": "disk",
+  "apps.list": "apps",
+  "apps.leftovers": "apps",
 };
 
 export default function App() {
@@ -83,9 +88,11 @@ export default function App() {
     <NavigateContext.Provider value={setPage}>
     <ElevationProvider page={page} onStartPage={openStart}>
     <MemoryFeedProvider>
+    <UpdateProvider>
       <div className="flex h-full">
         <Sidebar current={page} onSelect={setPage} busy={busyPages} />
         <main ref={mainRef} className="min-w-0 flex-1 overflow-auto p-6 2xl:px-10 2xl:py-8">
+          <UpdateBanner />
           {opened.map((id) => {
             const Page = PAGES[id];
             return (
@@ -100,6 +107,7 @@ export default function App() {
           })}
         </main>
       </div>
+    </UpdateProvider>
     </MemoryFeedProvider>
     </ElevationProvider>
     </NavigateContext.Provider>

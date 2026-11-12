@@ -100,7 +100,7 @@ pub struct Cpu {
     pub max_mhz: Option<u16>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MemorySlot {
     /// Tên khe, vd "DIMM A1" / "ChannelA-DIMM0".

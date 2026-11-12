@@ -66,8 +66,10 @@ pub struct Rule {
 }
 
 impl Rule {
+    /// `include`/`exclude` đã được `parse` hạ chữ thường.
     pub fn file_matches(&self, name: &str) -> bool {
-        self.include.iter().any(|p| super::glob::matches(p, name)) && !self.exclude.iter().any(|p| super::glob::matches(p, name))
+        use super::glob::matches_lower;
+        self.include.iter().any(|p| matches_lower(p, name)) && !self.exclude.iter().any(|p| matches_lower(p, name))
     }
 }
 
@@ -118,7 +120,14 @@ pub fn parse(src: &str) -> AppResult<Vec<Rule>> {
             }
         }
     }
-    Ok(file.rules)
+    let mut rules = file.rules;
+    // Hạ chữ thường mẫu một lần ở đây (so khớp không phân biệt hoa thường) thay vì ở mỗi file.
+    for r in &mut rules {
+        for p in r.include.iter_mut().chain(r.exclude.iter_mut()) {
+            *p = p.to_lowercase();
+        }
+    }
+    Ok(rules)
 }
 
 pub fn embedded() -> AppResult<Vec<Rule>> {

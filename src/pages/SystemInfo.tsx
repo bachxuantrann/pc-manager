@@ -1,3 +1,4 @@
+import { IconCheck, IconRefresh } from "../components/Icons";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
@@ -133,10 +134,11 @@ export default function SystemInfoPage() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" loading={loading} onClick={load}>
-            {!loading && "↻ "}Tải lại
+            {!loading && <IconRefresh />}Tải lại
           </Button>
           <Button variant="primary" size="sm" disabled={!info} onClick={copy} title="Sao chép cấu hình dạng văn bản để gửi người khác">
-            {copied ? "✓ Đã sao chép" : "Sao chép cấu hình"}
+            {copied && <IconCheck />}
+            {copied ? "Đã sao chép" : "Sao chép cấu hình"}
           </Button>
         </div>
       }

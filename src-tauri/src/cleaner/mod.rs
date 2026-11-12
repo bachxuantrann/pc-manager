@@ -105,6 +105,8 @@ pub struct Progress {
     pub current: String,
     pub files: u64,
     pub bytes: u64,
+    /// Khi dọn: tổng số file của các rule đã chọn (để tính % theo file, không chỉ theo rule). 0 khi quét.
+    pub total_files: u64,
 }
 
 enum Prepared {
@@ -175,21 +177,20 @@ impl CleanerManager {
     /// đã bật trong Cài đặt — đó là bước người dùng xác nhận). Mọi lớp an toàn
     /// (tuổi file, file bị khoá, danh sách cấm/bảo vệ, link) vẫn áp dụng.
     pub fn auto_clean(&self, store: &Store, rule_ids: &[String]) -> AppResult<CleanReport> {
+        let _g = self.lock_running()?;
         let eligible: Vec<String> = self.auto_eligible().into_iter().map(|(id, _, _)| id).collect();
-        let scan = self.scan(&|_| {})?;
+        // Quét/dọn trên kết quả riêng: KHÔNG đụng `self.last` — người dùng có thể đang xem bản xem trước
+        // ở trang Dọn rác, thay nó thì bấm Dọn sẽ báo "kết quả quét đã cũ".
+        let (scan, stored) = self.scan_inner(&|_| {})?;
         let ids: Vec<String> = scan
             .rules
             .iter()
             .filter(|r| matches!(r.status, RuleStatus::Ready) && rule_ids.contains(&r.id) && eligible.contains(&r.id))
             .map(|r| r.id.clone())
             .collect();
-        if ids.is_empty() {
-            // Không có gì để dọn — bỏ kết quả quét.
-            {
-                let mut l = self.last.lock_recover();
-                l.take();
-            }
-            return Ok(CleanReport {
+        match stored {
+            Some(mut stored) if !ids.is_empty() => self.clean_inner(store, &mut stored, &ids, false, &|_| {}),
+            _ => Ok(CleanReport {
                 dry_run: false,
                 rules: Vec::new(),
                 freed_bytes: 0,
@@ -198,10 +199,9 @@ impl CleanerManager {
                 skipped_changed: 0,
                 errors: 0,
                 duration_ms: scan.duration_ms,
-                cancelled: false,
-            });
+                cancelled: scan.cancelled,
+            }),
         }
-        self.clean(store, scan.scan_id, &ids, false, &|_| {})
     }
 
     /// Pool nền dùng chung (max(2, cpus/2) thread ưu tiên thấp).
@@ -245,6 +245,18 @@ impl CleanerManager {
 
     fn scan_impl(&self, on_progress: &(dyn Fn(Progress) + Sync), keep: bool) -> AppResult<ScanResult> {
         let _g = self.lock_running()?;
+        let (result, stored) = self.scan_inner(on_progress)?;
+        // Ước lượng (keep = false) không đụng tới kết quả cũ.
+        if keep {
+            let mut last = self.last.lock_recover();
+            *last = stored;
+        }
+        Ok(result)
+    }
+
+    /// Quét mọi rule. Trả về kết quả cho UI và dữ liệu để dọn (None nếu quét bị huỷ dở — không được
+    /// dùng để dọn). Người gọi phải giữ `lock_running`.
+    fn scan_inner(&self, on_progress: &(dyn Fn(Progress) + Sync)) -> AppResult<(ScanResult, Option<StoredScan>)> {
         self.cancel.store(false, Ordering::Relaxed);
         let started = Instant::now();
         let now = SystemTime::now();
@@ -269,6 +281,7 @@ impl CleanerManager {
                 current: current.to_owned(),
                 files: counters.files.load(Ordering::Relaxed),
                 bytes: counters.bytes.load(Ordering::Relaxed),
+                total_files: 0,
             });
         };
 
@@ -299,18 +312,15 @@ impl CleanerManager {
             rules_out.push(summary);
         }
         let total_bytes = rules_out.iter().filter(|r| matches!(r.status, RuleStatus::Ready)).map(|r| r.bytes).sum();
-        // Quét bị huỷ dở thì không được dùng để dọn. Ước lượng (keep = false) không đụng tới kết quả cũ.
-        if keep {
-            let mut last = self.last.lock_recover();
-            *last = (!cancelled).then(|| StoredScan { id, at: Instant::now(), data });
-        }
-        Ok(ScanResult {
+        let stored = (!cancelled).then(|| StoredScan { id, at: Instant::now(), data });
+        let result = ScanResult {
             scan_id: id,
             rules: rules_out,
             total_bytes,
             duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             cancelled,
-        })
+        };
+        Ok((result, stored))
     }
 
     fn scan_rule(&self, rule: &Rule, now: SystemTime, c: &Counters) -> (RuleStatus, Option<Prepared>) {
@@ -339,19 +349,66 @@ impl CleanerManager {
         on_progress: &(dyn Fn(Progress) + Sync),
     ) -> AppResult<CleanReport> {
         let _g = self.lock_running()?;
-        self.cancel.store(false, Ordering::Relaxed);
-        let started = Instant::now();
         let mut scan = self
             .last
             .lock_recover()
             .take()
             .filter(|s| s.id == scan_id && s.at.elapsed() < SCAN_TTL)
             .ok_or_else(|| AppError::InvalidInput("kết quả quét đã cũ hoặc không tồn tại — hãy quét lại".into()))?;
+        let report = self.clean_inner(store, &mut scan, rule_ids, dry_run, on_progress)?;
+        // Dry-run không xoá gì => giữ kết quả quét để có thể dọn thật ngay sau đó.
+        if dry_run {
+            scan.at = Instant::now();
+            let mut last = self.last.lock_recover();
+            *last = Some(scan);
+        }
+        Ok(report)
+    }
+
+    /// Dọn `rule_ids` từ kết quả quét `scan`. Người gọi phải giữ `lock_running`.
+    fn clean_inner(
+        &self,
+        store: &Store,
+        scan: &mut StoredScan,
+        rule_ids: &[String],
+        dry_run: bool,
+        on_progress: &(dyn Fn(Progress) + Sync),
+    ) -> AppResult<CleanReport> {
+        self.cancel.store(false, Ordering::Relaxed);
+        let started = Instant::now();
 
         let running = Self::running_processes();
         let now = SystemTime::now();
         let counters = Counters::default();
         let total = rule_ids.len() as u32;
+        let total_files: u64 = rule_ids
+            .iter()
+            .filter_map(|id| scan.data.get(id))
+            .map(|p| match p {
+                Prepared::Files(d) => d.files.len() as u64,
+                Prepared::Recycle(i) => i.items,
+            })
+            .sum();
+        let last_emit = Mutex::new(Instant::now() - Duration::from_secs(1));
+        // Đầu mỗi rule luôn gửi; giữa rule (theo file) tối đa ~10 lần/giây.
+        let emit = |done_rules: u32, name: &str, force: bool| {
+            {
+                let mut t = last_emit.lock_recover();
+                if !force && t.elapsed() < Duration::from_millis(100) {
+                    return;
+                }
+                *t = Instant::now();
+            }
+            on_progress(Progress {
+                phase: "clean",
+                done_rules,
+                total_rules: total,
+                current: name.to_owned(),
+                files: counters.files.load(Ordering::Relaxed),
+                bytes: counters.bytes.load(Ordering::Relaxed),
+                total_files,
+            });
+        };
         let mut out = Vec::new();
 
         self.pool()?.install(|| {
@@ -360,14 +417,8 @@ impl CleanerManager {
                     break;
                 }
                 let Some(rule) = self.rules.iter().find(|r| &r.id == id) else { continue };
-                on_progress(Progress {
-                    phase: "clean",
-                    done_rules: i as u32,
-                    total_rules: total,
-                    current: rule.name.clone(),
-                    files: counters.files.load(Ordering::Relaxed),
-                    bytes: counters.bytes.load(Ordering::Relaxed),
-                });
+                emit(i as u32, &rule.name, true);
+                let tick = || emit(i as u32, &rule.name, false);
                 let mut rc = RuleClean { id: id.clone(), name: rule.name.clone(), stats: DeleteStats::default(), message: None };
                 match (scan.data.get(id), self.precheck(rule, &running)) {
                     (None, _) => rc.message = Some("không có trong kết quả quét".into()),
@@ -382,28 +433,21 @@ impl CleanerManager {
                                 Ok(()) => {
                                     rc.stats.deleted_files = info.items;
                                     rc.stats.freed_bytes = info.bytes;
+                                    counters.files.fetch_add(info.items, Ordering::Relaxed);
+                                    counters.bytes.fetch_add(info.bytes, Ordering::Relaxed);
                                 }
                                 Err(e) => rc.message = Some(format!("không làm rỗng được Thùng rác: {e}")),
                             }
                         }
                     }
                     (Some(Prepared::Files(data)), None) => {
-                        self.clean_files(store, rule, data, now, dry_run, &counters, &mut rc);
+                        self.clean_files(store, rule, data, now, dry_run, &counters, &tick, &mut rc);
                     }
                 }
                 log_rule(store, dry_run, &rc);
                 out.push(rc);
             }
         });
-
-        // Dry-run không xoá gì => giữ kết quả quét để có thể dọn thật ngay sau đó.
-        if dry_run {
-            scan.at = Instant::now();
-            {
-                let mut last = self.last.lock_recover();
-                *last = Some(scan);
-            }
-        }
 
         let sum = |f: fn(&DeleteStats) -> u64| out.iter().map(|r| f(&r.stats)).sum();
         Ok(CleanReport {
@@ -428,6 +472,7 @@ impl CleanerManager {
         now: SystemTime,
         dry_run: bool,
         counters: &Counters,
+        tick: &dyn Fn(),
         rc: &mut RuleClean,
     ) {
         // Dừng service đang giữ file (vd Windows Update), chạy lại sau khi dọn.
@@ -445,7 +490,7 @@ impl CleanerManager {
                 }
             }
         }
-        rc.stats = engine::delete(rule, data, &self.bans, now, dry_run, &self.cancel, counters);
+        rc.stats = engine::delete(rule, data, &self.bans, now, dry_run, &self.cancel, counters, tick);
         if let Some(svc) = restart {
             let r = sys::service::start(&svc);
             store.log_action_best_effort("service.start", &svc, r.is_ok(), &r.err().map(|e| e.to_string()).unwrap_or_default());

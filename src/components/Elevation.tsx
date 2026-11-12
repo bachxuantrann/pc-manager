@@ -1,3 +1,4 @@
+import { IconShield } from "./Icons";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Button from "./Button";
 import { Notice } from "./Card";
@@ -24,7 +25,6 @@ export function ElevationProvider({ page, onStartPage, children }: { page: strin
       })
       .catch(() => setElevated(null));
     // Chỉ hỏi một lần khi cửa sổ mở.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return <Ctx.Provider value={{ elevated, page }}>{children}</Ctx.Provider>;
 }
@@ -54,7 +54,8 @@ export function ElevateButton({ size = "sm", label = "Chạy với quyền Admin
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       <Button variant="warning" size={size} loading={busy} onClick={run} title="Windows sẽ hỏi xác nhận (UAC), rồi PC Manager mở lại với quyền Administrator">
-        🛡 {label}
+        <IconShield className="h-4 w-4" />
+        {label}
       </Button>
       {err && <span className="text-xs opacity-80">{err}</span>}
     </span>

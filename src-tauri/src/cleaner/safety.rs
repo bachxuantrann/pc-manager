@@ -123,6 +123,29 @@ pub struct BanList {
     exact: Vec<(String, &'static str)>,
 }
 
+/// Kết quả `BanList::for_dir` cho một thư mục.
+pub struct DirBans {
+    /// Cấm mọi file trong thư mục (lý do).
+    all: Option<&'static str>,
+    /// Đường dẫn (đã `norm`) cấm đúng bằng một file trong thư mục.
+    children: Vec<(String, &'static str)>,
+}
+
+impl DirBans {
+    fn all(why: &'static str) -> Self {
+        Self { all: Some(why), children: Vec::new() }
+    }
+
+    /// `file` phải nằm ngay trong thư mục đã dùng để tạo `DirBans`.
+    pub fn check_file(&self, file: &Path) -> Option<&'static str> {
+        if self.all.is_some() || self.children.is_empty() {
+            return self.all;
+        }
+        let s = norm(&file.to_string_lossy());
+        self.children.iter().find(|(b, _)| s == *b).map(|(_, w)| *w)
+    }
+}
+
 pub fn norm(s: &str) -> String {
     let s = s.replace('/', "\\");
     let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
@@ -155,6 +178,52 @@ impl BanList {
 
     pub fn from_env() -> Self {
         Self::new(&BanCtx::from_env())
+    }
+
+    /// Kiểm tra cấm cho mọi file nằm NGAY trong `dir`, tính một lần cho cả thư mục (quét thư mục hàng
+    /// trăm nghìn file tạm không phải chuẩn hoá đường dẫn và khoá whitelist cho từng file).
+    /// `for_dir(d).check_file(f)` cho cùng kết quả có/không với `check(f)` khi `f.parent() == d`.
+    pub fn for_dir(&self, dir: &Path) -> DirBans {
+        let mut normals = 0usize;
+        for c in dir.components() {
+            match c {
+                Component::Prefix(p) => {
+                    if !matches!(p.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_)) {
+                        return DirBans::all("ổ mạng / đường dẫn đặc biệt");
+                    }
+                }
+                Component::RootDir => {}
+                Component::Normal(_) => normals += 1,
+                Component::CurDir | Component::ParentDir => return DirBans::all("đường dẫn chứa '.' hoặc '..'"),
+            }
+        }
+        if !dir.is_absolute() {
+            return DirBans::all("đường dẫn tương đối");
+        }
+        // File nằm ngay ở gốc ổ đĩa.
+        if normals == 0 {
+            return DirBans::all("gốc ổ đĩa");
+        }
+        let d = norm(&dir.to_string_lossy());
+        if crate::settings::is_protected(&d) {
+            return DirBans::all("nằm trong danh sách bảo vệ của bạn");
+        }
+        for (base, why) in &self.under {
+            if d == *base || d.strip_prefix(base.as_str()).is_some_and(|rest| rest.starts_with('\\')) {
+                return DirBans::all(why);
+            }
+        }
+        if let Some((_, why)) = self.shallow.iter().find(|(base, _)| d == *base) {
+            return DirBans::all(why);
+        }
+        // Còn lại: mục cấm đúng bằng một con trực tiếp của `dir` (hiếm — thường rỗng).
+        let is_child = |p: &str| p.strip_prefix(d.as_str()).and_then(|r| r.strip_prefix('\\')).is_some_and(|n| !n.is_empty() && !n.contains('\\'));
+        let mut children: Vec<(String, &'static str)> =
+            self.shallow.iter().chain(&self.exact).filter(|(b, _)| is_child(b)).map(|(b, w)| (b.clone(), *w)).collect();
+        children.extend(
+            crate::settings::protected_children(&d).into_iter().map(|p| (p, "nằm trong danh sách bảo vệ của bạn")),
+        );
+        DirBans { all: None, children }
     }
 
     /// `Some(lý do)` nếu đường dẫn bị cấm xoá.
@@ -245,6 +314,35 @@ mod tests {
     }
 
     #[test]
+    fn dir_level_check_agrees_with_per_file_check() {
+        let b = bans();
+        for p in [
+            r"C:\x.tmp",
+            r"C:\Windows\x.log",
+            r"C:\Windows\Temp\x.tmp",
+            r"C:\Windows\System32\x.dll",
+            r"C:\Windows\System32\drivers\x.sys",
+            r"C:\Windows\SysWOW64\x.dll",
+            r"C:\Users\x.tmp",
+            r"C:\Users\An\x.tmp",
+            r"C:\Users\An\Documents",
+            r"C:\Users\An\AppData\Local\Temp\a.tmp",
+            r"C:\Users\An\Documents\hop-dong.docx",
+            r"C:\ProgramData\x.tmp",
+            r"C:\ProgramData\App\cache\x.tmp",
+            r"C:\Program Files\App\app.exe",
+            r"C:\Windows\System32Backup\x.tmp",
+            r"D:\Tai lieu\hop-dong.pdf",
+            r"D:\Games\cache\x.bin",
+            r"\\server\share\x.tmp",
+        ] {
+            let path = Path::new(p);
+            let dir = path.parent().unwrap();
+            assert_eq!(b.for_dir(dir).check_file(path).is_some(), b.check(path).is_some(), "{p}");
+        }
+    }
+
+    #[test]
     fn ban_is_case_insensitive_and_ignores_separators() {
         assert!(banned(r"c:\windows\SYSTEM32\x.dll"));
         assert!(banned("C:/Windows/System32/x.dll"));
@@ -306,7 +404,8 @@ mod tests {
         let b = BanList::from_env();
         let sys = std::env::var("SystemRoot").unwrap();
         assert!(b.check(&Path::new(&sys).join(r"System32\notepad.exe")).is_some());
-        let profile = std::env::var("USERPROFILE").unwrap();
+        // Profile của user đang đăng nhập (như BanList::from_env), không phải của tài khoản chạy test.
+        let profile = crate::user::env("USERPROFILE").unwrap();
         assert!(b.check(Path::new(&profile)).is_some());
         assert!(b.check(&Path::new(&profile).join(r"AppData\Local\Temp\x.tmp")).is_none());
     }

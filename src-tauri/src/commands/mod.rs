@@ -7,8 +7,35 @@ pub mod memory;
 pub mod process;
 pub mod settings;
 pub mod startup;
+pub mod update;
 
 use std::time::Duration;
+
+/// Mở một trang Windows Settings cố định (`ms-settings:…`) qua `%SystemRoot%\explorer.exe`. Không nhận URI từ UI.
+/// PC Manager đang có quyền admin => mở dưới user đang đăng nhập, quyền thường (cha = Explorer): Settings là app
+/// UWP, mở bằng token admin thì trang trống rồi tự đóng.
+pub(crate) fn open_ms_settings(uri: &'static str) -> crate::error::AppResult<()> {
+    let explorer = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("explorer.exe");
+    if crate::sys::token::is_elevated().unwrap_or(true) {
+        crate::sys::launch::spawn_as_shell_user(&explorer, uri, &crate::user::environment(), 0)
+            .map_err(|e| crate::error::AppError::Other(format!("không mở được Windows Settings: {}", e.message())))?;
+        return Ok(());
+    }
+    std::process::Command::new(explorer).arg(uri).spawn()?;
+    Ok(())
+}
+
+/// Chạy `f` trên thread blocking với `AppState`; tác vụ panic => lỗi `internal` thân thiện (`what` = đang làm gì).
+pub(crate) async fn blocking<T, F>(app: tauri::AppHandle, what: &'static str, f: F) -> crate::error::AppResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&crate::state::AppState) -> crate::error::AppResult<T> + Send + 'static,
+{
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || f(&app.state::<crate::state::AppState>()))
+        .await
+        .map_err(|e| crate::error::task_failed(what, e))?
+}
 
 use serde::Serialize;
 use tauri::{AppHandle, State};

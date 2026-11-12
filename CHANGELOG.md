@@ -3,6 +3,75 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.2.0] - 2026-11-12
+
+### Mới
+- **Tự cập nhật trong app.** Có bản mới trên GitHub Release => dải thông báo ở đầu cửa sổ và thẻ "Cập nhật" trong Cài đặt
+  (kèm "Có gì mới"). Bấm "Cập nhật" => tải bộ cài, **kiểm chữ ký** (khoá riêng chỉ nằm trong secret của CI), Windows hỏi UAC,
+  cài xong app tự mở lại. Không bao giờ tự cài; tự kiểm tra tối đa 1 lần/ngày khi mở cửa sổ (tắt được trong Cài đặt), chỉ gửi
+  một yêu cầu tới github.com. Cập nhật giữ nguyên tuỳ chọn "Khởi động cùng Windows" (trước đây cài đè sẽ xoá task này).
+
+### Bảo mật
+- **Gỡ app cài riêng cho người dùng (HKCU) không còn chạy bằng quyền Administrator.** Khi PC Manager đang
+  chạy quyền admin, trình gỡ của các app này giờ luôn chạy dưới tài khoản đang đăng nhập với quyền thường
+  (như Windows Settings). Lệnh gỡ trong HKCU sửa được bởi mọi chương trình quyền thường, nên chạy nó bằng
+  quyền admin là đường leo thang đặc quyền. Trình gỡ nào tự đòi quyền admin => PC Manager báo lỗi và hướng
+  dẫn gỡ từ quyền thường (Windows sẽ hỏi UAC), không bao giờ tự dùng quyền admin của mình.
+
+### Sửa lỗi
+- Dọn rác tự động không còn thay kết quả quét bạn đang xem ở trang Dọn rác (trước đây bấm Dọn sau đó sẽ báo
+  "kết quả quét đã cũ").
+- **Smart Boost (bấm tay và tự động) dùng Boost nhẹ** thay vì Boost sâu. Khi RAM thấp, xoá toàn bộ cache
+  standby không làm tăng RAM khả dụng (Windows vốn nhường cache đó ngay khi app cần) mà chỉ làm máy đọc đĩa
+  nhiều hơn; lợi ích thật đến từ việc ghi dữ liệu chờ (modified) xuống đĩa. Sửa lại mô tả thẻ Smart Boost.
+  Đo trên máy thật (3 lần): Boost nhẹ tăng RAM khả dụng +4…+215 MB, chỉ xoá 57–585 MB cache; Boost sâu chỉ tăng
+  +54…+93 MB nhưng xoá 3,8–4,4 GB cache.
+- Chẩn đoán: khi RAM còn dưới 10%, hành động đề xuất là "Mở Tiến trình" để đóng bớt app nặng (Boost chỉ giúp
+  chút ít); mô tả khi RAM 10–20% nói đúng việc Boost làm.
+- Dọn rác tự động kiểm tra lịch lần đầu sau ~2 phút kể từ khi mở PC Manager (trước đây 30 phút — phiên dùng
+  máy ngắn thì không bao giờ dọn).
+
+### Thay đổi
+- **Tác vụ dài có tiến độ và nối lại được** khi đóng cửa sổ (xuống tray) rồi mở lại: chuyển file vào Thùng rác
+  ở trang Ổ đĩa (có nút Dừng), dọn phần còn sót sau khi gỡ app, tải danh sách ứng dụng.
+- Thanh tiến độ Dọn rác chạy theo số file đã dọn, không đứng yên trong một mục có hàng chục nghìn file.
+- Quét file lớn / file trùng có ngưỡng tối thiểu ở backend (1 MB / 64 KB) để không giữ danh sách quá lớn trong RAM.
+- **Trang Khởi động hiện cả app Microsoft Store** tự chạy khi đăng nhập (Teams, Terminal, Xbox…, chỉ xem — như tab
+  Startup của Task Manager); dịch vụ hiện đúng tên hiển thị thay vì tên key (`@dll,-123`); shortcut `.Lnk` hoa thường
+  lẫn lộn được cắt đuôi đúng. Mục app Store có nút "Mở Task Manager" mở thẳng tab Startup để bật/tắt
+  (không dùng Settings → Apps → Startup vì trang đó crash trên một số bản Windows 11).
+- **Trang Ứng dụng liệt kê cả app Microsoft Store** (đọc từ registry + manifest, không nạp WinRT nên không tốn thêm
+  RAM lúc rảnh); nút "Gỡ trong Settings" mở Windows Settings → Apps.
+- Dọn rác: thêm cache trình duyệt Brave, Vivaldi, Cốc Cốc, Opera / Opera GX; Chrome/Edge thêm `Service Worker\CacheStorage`,
+  `ShaderCache`, `GrShaderCache`; Firefox thêm `startupCache`. Không đụng dữ liệu trang web (IndexedDB, Local Storage).
+- "Bản cập nhật Windows đã tải": mô tả đúng hơn (có cả bản đang chờ cài, Windows sẽ tải lại) và không còn được chọn sẵn.
+- Chẩn đoán: gợi ý "Bật XMP/EXPO" chỉ hiện với RAM rời của máy bàn (DIMM), không còn báo sai trên laptop.
+- Bật/tắt mục khởi động của máy khi thiếu quyền: thông báo có nút "Chạy với quyền Administrator", không phụ thuộc ngôn
+  ngữ của Windows.
+- Thanh trượt ngưỡng Smart Boost chỉ lưu (và ghi nhật ký) khi giá trị thật sự đổi.
+- Giao diện: trang Tiến trình và Khởi động dùng khung trang chung (tiêu đề to lên ở màn lớn như các trang khác); emoji/ký tự
+  (🔒 🛡 ✓ ↻ ▸▾ ⚠) thay bằng biểu tượng SVG tự vẽ, hiển thị giống nhau trên mọi máy.
+
+### Hiệu năng
+- Số liệu RAM chỉ được hỏi khi đang mở Tổng quan hoặc Bộ nhớ (trước đây 2 giây/lần ở mọi trang); trang ẩn không còn vẽ lại
+  biểu đồ. Đo ở bản dev: trang Cài đặt 0 lần `memory_status` trong 6,5 giây (trước: ~3 lần).
+- Bảng Tiến trình chỉ vẽ lại các dòng có số liệu thay đổi (trước: dựng lại cả 300+ dòng mỗi 2 giây).
+- Lấy mẫu "lần dùng cuối" ghi SQLite ít hơn hẳn: exe mới ghi ngay, exe đang chạy làm mới tối đa 15 phút/lần
+  (trước: 150–300 lệnh ghi mỗi phút).
+- Quét rác kiểm tra danh sách cấm theo thư mục (một lần cho cả thư mục) và hạ chữ thường mẫu lọc một lần lúc nạp rule;
+  bước kiểm tra lại trước khi xoá vẫn từng file.
+- Mở trang Cài đặt không còn chạy `schtasks.exe` (đọc trạng thái khởi động cùng Windows qua COM).
+- Cơ sở dữ liệu không lớn dần mãi: giữ 5.000 dòng nhật ký mới nhất, bỏ mẫu "lần dùng cuối" của exe không thấy chạy hơn 1 năm.
+
+### Nội bộ
+- Build release chỉ tạo `rlib` cho thư viện (bỏ `staticlib`/`cdylib` chỉ cần cho mobile): build lại crate bản release
+  ~194 giây → ~160 giây (nhanh hơn ~17%, đo 2 lần, dependency đã build sẵn).
+- `scripts/admin-test.ps1` chạy được khi nâng quyền bằng tài khoản admin khác (truyền `CARGO_HOME`/`RUSTUP_HOME` của
+  người đang đăng nhập); các test phụ thuộc môi trường dùng `%TEMP%`/biến của user đang đăng nhập.
+- Gộp mã lặp (`commands::blocking`, `now_ms`, `expand_env`, `run_elevated`); skill `rust-skills` rút gọn cho dự án
+  (265 → 129 quy tắc); `CLAUDE.md` gọn lại (chi tiết API ở `docs/FEATURES.md`, mốc đo ở `docs/PERF.md`); thêm
+  `AGENTS.md`; `PROMPTS.md` chuyển vào `docs/history/`; bỏ README tiếng Nhật và tiếng Trung.
+
 ## [1.1.3] - 2026-11-12
 
 ### Sửa lỗi

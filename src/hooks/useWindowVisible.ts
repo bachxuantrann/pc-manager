@@ -26,6 +26,5 @@ export function useVisibleInterval(fn: () => void, ms: number) {
     fn();
     const id = window.setInterval(fn, ms);
     return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, ms]);
 }

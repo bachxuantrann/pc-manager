@@ -1,4 +1,5 @@
-import { INPUT, SELECT, SURFACE, THEAD } from "../components/ui";
+import { IconCheck, IconWarning, IconX } from "../components/Icons";
+import { INPUT, SELECT, SURFACE, THEAD, pill } from "../components/ui";
 import { useReportBusy } from "../hooks/usePageActive";
 import { useJobResume } from "../hooks/useJobResume";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -135,14 +136,20 @@ function FileRow({
           <span className="font-medium">{name}</span>
           {status && (
             <span className={`ml-2 text-xs ${status.ok ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-              {status.ok ? "✓ đã vào Thùng rác" : `✗ ${status.message ?? "lỗi"}`}
+              {status.ok ? <IconCheck /> : <IconX />} {status.ok ? "đã vào Thùng rác" : (status.message ?? "lỗi")}
             </span>
           )}
         </div>
         <div className="truncate text-xs opacity-60">{dir}</div>
         {(f.blocked || f.warning) && (
           <div className={`truncate text-xs ${f.blocked ? "" : "text-amber-700 dark:text-amber-300"}`}>
-            {f.blocked ? `Không thể xoá: ${f.blocked}` : `⚠ ${f.warning}`}
+            {f.blocked ? (
+              `Không thể xoá: ${f.blocked}`
+            ) : (
+              <>
+                <IconWarning /> {f.warning}
+              </>
+            )}
           </div>
         )}
       </td>
@@ -167,6 +174,8 @@ export default function Disk() {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Tiến độ chuyển vào Thùng rác (done/total = số file). */
+  const [recycleProgress, setRecycleProgress] = useState<DiskProgress | null>(null);
   useReportBusy(scanning || busy);
   /** Ẩn file rủi ro (dữ liệu ứng dụng, ổ đĩa ảo, file bị chặn) — mặc định bật. */
   const [safeOnly, setSafeOnly] = useState(true);
@@ -220,6 +229,26 @@ export default function Disk() {
   });
   useJobResume<DiskProgress>("disk.large", resumeScan("large"));
   useJobResume<DiskProgress>("disk.dups", resumeScan("dup"));
+
+  const applyReport = (r: RecycleReport) => {
+    setReport((prev) => (prev ? { ...r, items: [...prev.items.filter((o) => !r.items.some((n) => n.id === o.id)), ...r.items] } : r));
+    setSelected(new Set());
+    loadDrives();
+  };
+  // Đóng cửa sổ lúc đang chuyển file vào Thùng rác rồi mở lại: hiện lại tiến độ và kết quả.
+  useJobResume<DiskProgress>("disk.recycle", {
+    onRunning: (p) => {
+      setBusy(true);
+      setRecycleProgress(p);
+    },
+    onProgress: setRecycleProgress,
+    onDone: (o) => {
+      setBusy(false);
+      setRecycleProgress(null);
+      if (o.ok) applyReport(o.value as RecycleReport);
+      else setError(errorMessage(o.value));
+    },
+  });
 
   const current = tab === "large" ? large : dups;
   // Chỉ những gì đang hiện mới được chọn / chuyển vào Thùng rác.
@@ -280,7 +309,8 @@ export default function Disk() {
             {formatBytes(chosenBytes)} sẽ được chuyển vào <b>Thùng rác</b> — bạn có thể khôi phục. Dung lượng chỉ được giải phóng khi
             làm rỗng Thùng rác.
           </p>
-          {chosenWarn > 0 && <p className="text-amber-700 dark:text-amber-300">⚠ {chosenWarn} file là dữ liệu ứng dụng / ổ đĩa ảo.</p>}
+          {chosenWarn > 0 && <p className="text-amber-700 dark:text-amber-300">
+              <IconWarning /> {chosenWarn} file là dữ liệu ứng dụng / ổ đĩa ảo.</p>}
           <p className="text-xs opacity-70">File quá lớn so với Thùng rác: Windows sẽ hỏi lại trước khi xoá hẳn.</p>
         </div>
       ),
@@ -290,15 +320,14 @@ export default function Disk() {
         if (!current) return;
         setBusy(true);
         setError(null);
+        setRecycleProgress(null);
         try {
-          const r = await api.diskRecycle(current.scanId, chosen.map((f) => f.id));
-          setReport((prev) => (prev ? { ...r, items: [...prev.items.filter((o) => !r.items.some((n) => n.id === o.id)), ...r.items] } : r));
-          setSelected(new Set());
-          loadDrives();
+          applyReport(await api.diskRecycle(current.scanId, chosen.map((f) => f.id), setRecycleProgress));
         } catch (e) {
           setError(errorMessage(e));
         } finally {
           setBusy(false);
+          setRecycleProgress(null);
         }
       },
     });
@@ -313,7 +342,7 @@ export default function Disk() {
 
       <Card className="mt-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-md bg-black/5 p-0.5 dark:bg-white/10">
+          <div className="flex gap-1">
             {(["large", "dup"] as Tab[]).map((t) => (
               <button
                 key={t}
@@ -323,7 +352,7 @@ export default function Disk() {
                   setTab(t);
                   reset();
                 }}
-                className={`rounded px-3 py-1 text-sm ${tab === t ? "bg-white shadow-sm dark:bg-white/20" : "opacity-70 hover:opacity-100"}`}
+                className={`${pill(tab === t)} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {t === "large" ? "File lớn" : "File trùng"}
               </button>
@@ -376,11 +405,30 @@ export default function Disk() {
           <Notice tone="error" onClose={() => setError(null)}>{error}</Notice>
         </div>
       )}
+      {busy && (
+        <Card className="mt-3">
+          <div className="flex items-center gap-3">
+            <ProgressBar
+              className="min-w-0 flex-1"
+              pct={recycleProgress && recycleProgress.total > 0 ? (recycleProgress.done / recycleProgress.total) * 100 : null}
+              label={
+                recycleProgress
+                  ? `Đang chuyển vào Thùng rác: ${recycleProgress.done.toLocaleString("vi-VN")} / ${recycleProgress.total.toLocaleString("vi-VN")} file`
+                  : "Đang chuyển vào Thùng rác…"
+              }
+            />
+            <Button variant="secondary" size="sm" onClick={() => api.diskCancel()}>
+              Dừng
+            </Button>
+          </div>
+        </Card>
+      )}
       {report && (
         <div className="mt-3">
-          <Notice tone={report.failed ? "warn" : "ok"}>
+          <Notice tone={report.failed || report.cancelled ? "warn" : "ok"} onClose={() => setReport(null)}>
             Đã chuyển {report.recycled} file ({formatBytes(report.recycledBytes)}) vào Thùng rác
-            {report.failed > 0 && `, ${report.failed} file không chuyển được`}. Làm rỗng Thùng rác (trang Dọn rác) để giải phóng dung lượng.
+            {report.failed > 0 && `, ${report.failed} file không chuyển được`}
+            {report.cancelled && " (đã dừng giữa chừng)"}. Làm rỗng Thùng rác (trang Dọn rác) để giải phóng dung lượng.
           </Notice>
         </div>
       )}

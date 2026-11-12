@@ -1,2 +1,20 @@
 Nguồn: https://github.com/leonardomso/rust-skills (commit fd2a861, MIT)
 Cài thủ công ngày 2026-11-11: chỉ SKILL.md + rules/ + LICENSE (không cài checks/, .github/).
+
+Rút gọn cho dự án ngày 2026-11-12 (PLAN.md mục T1): 265 → 129 quy tắc, SKILL.md 38 KB → ~13 KB.
+SKILL.md được viết lại: mục lục chỉ còn các quy tắc giữ lại + phần "CLAUDE.md luôn thắng".
+
+Bỏ cả nhóm (không áp dụng cho app desktop một tiến trình, không xuất bản crate):
+  async- (18), api- (17), opt- (12), trait- (6), const- (4), macro- (8), closure- (5),
+  test- (15), doc- (12), obs- (7), proj- (14)
+Bỏ từng quy tắc mâu thuẫn CLAUDE.md:
+  mem-arena-allocator, mem-arrayvec, mem-compact-string, mem-smallvec, mem-thinvec,
+  mem-assert-type-size          — thư viện mới / bộ nhớ phình khi chạy nền lâu
+  perf-ahash, perf-collect-into, perf-black-box-bench, perf-release-profile
+                                — thư viện mới / nightly / criterion / panic = "abort"
+  unsafe-miri-ci                — Miri không chạy được với Win32 FFI
+  pat-if-let-chains             — cú pháp edition 2024 (dự án là 2021)
+  lint-cargo-metadata, lint-workspace-lints, name-crate-no-rs — chỉ cho crate xuất bản / workspace
+  anti-lock-across-await        — dự án không dùng async cho logic
+  serde-deny-unknown-fields     — chỉ dùng cho dữ liệu nhúng lúc build (cleaner.toml)
+  err-expect-bugs-only          — dự án cấm expect() ngoài test

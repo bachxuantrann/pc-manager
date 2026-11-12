@@ -161,6 +161,14 @@ pub struct SystemCleanReport {
     /// DISM trả 3010: cần khởi động lại để hoàn tất.
     pub reboot_required: bool,
     pub duration_ms: u64,
+    /// Dung lượng tăng dưới `NOTHING_FREED` => coi như không lấy lại được gì (UI dùng cờ này, không tự so).
+    pub nothing_freed: bool,
+}
+
+impl SystemCleanReport {
+    fn new(freed_bytes: i64, exit_code: i32, reboot_required: bool, duration_ms: u64) -> Self {
+        Self { freed_bytes, exit_code, reboot_required, duration_ms, nothing_freed: freed_bytes < NOTHING_FREED }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -321,13 +329,13 @@ impl SystemCleaner {
         // Đọc trước khi dọn: đang chờ khởi động lại thì dọn ra 0 byte không có nghĩa là gói bị kẹt.
         let pending_before = servicing_restart_pending();
         let (code, _) = run_dism(&["/Online", "/Cleanup-Image", "/StartComponentCleanup", "/English"], on_progress)?;
-        let report = SystemCleanReport {
-            freed_bytes: system_free() as i64 - before as i64,
-            exit_code: code,
+        let report = SystemCleanReport::new(
+            system_free() as i64 - before as i64,
+            code,
             // Giao diện báo "cần khởi động lại" thay vì "không còn gì để dọn".
-            reboot_required: code == 3010 || pending_before || servicing_restart_pending(),
-            duration_ms: started.elapsed().as_millis() as u64,
-        };
+            code == 3010 || pending_before || servicing_restart_pending(),
+            started.elapsed().as_millis() as u64,
+        );
         let ok = code == 0 || code == 3010;
         store.log_action_best_effort(
             "system.winsxs",
@@ -389,12 +397,7 @@ impl SystemCleaner {
         let code = status?.code().unwrap_or(-1);
         // Chỉ hỏi "còn không" — không đo lại cả cây thư mục (hàng chục GB) như `windows_old_info`.
         let still = windows_old_exists();
-        let report = SystemCleanReport {
-            freed_bytes: system_free() as i64 - before as i64,
-            exit_code: code,
-            reboot_required: false,
-            duration_ms: started.elapsed().as_millis() as u64,
-        };
+        let report = SystemCleanReport::new(system_free() as i64 - before as i64, code, false, started.elapsed().as_millis() as u64);
         store.log_action_best_effort(
             "system.windows_old",
             "cleanmgr Previous Installations",

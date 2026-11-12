@@ -1,15 +1,18 @@
-import { INPUT, SURFACE, THEAD } from "../components/ui";
-import { useCallback, useMemo, useState } from "react";
+import { INPUT, SELECT, SURFACE, THEAD } from "../components/ui";
+import { memo, useCallback, useMemo, useState } from "react";
 import { AdminNotice } from "../components/Elevation";
 import Button from "../components/Button";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
-
-type Action = "open" | "trim" | "priority" | "suspend" | "resume" | "kill" | "killGroup";
 import { Notice } from "../components/Card";
+import { IconChevron, IconLock } from "../components/Icons";
+import PageShell from "../components/PageShell";
+import PublisherCell from "../components/PublisherCell";
 import { useVisibleInterval } from "../hooks/useWindowVisible";
 import { api, errorMessage, type PriorityClass, type ProcessInfo, type ProcessSnapshot, type Publisher } from "../lib/api";
 import { formatBytes } from "../lib/format";
-import { groupByName, matches, procKey, publisherText, sortRows, type Group, type Sort, type SortKey } from "../lib/processTable";
+import { groupByName, matches, procKey, sortRows, type Group, type Sort, type SortKey } from "../lib/processTable";
+
+type Action = "open" | "trim" | "priority" | "suspend" | "resume" | "kill" | "killGroup";
 
 const PRIORITY_LABEL: Record<PriorityClass, string> = {
   idle: "Thấp",
@@ -19,23 +22,111 @@ const PRIORITY_LABEL: Record<PriorityClass, string> = {
   high: "Cao",
 };
 
-function PublisherCell({ p }: { p: Publisher }) {
-  const text = publisherText(p);
-  const cls =
-    p.status === "signed"
-      ? ""
-      : p.status === "unsigned"
-        ? "text-amber-600 dark:text-amber-400"
-        : p.status === "invalid"
-          ? "text-red-600 dark:text-red-400"
-          : "opacity-50";
-  return (
-    <span className={cls} title={p.status === "invalid" ? `Mã lỗi ${p.code}` : undefined}>
-      {p.status === "signed" && <span className="mr-1 text-green-600">✓</span>}
-      {text}
-    </span>
-  );
-}
+const samePublisher = (a: Publisher, b: Publisher) =>
+  a.status === b.status && (a.status !== "signed" || b.status !== "signed" || a.name === b.name);
+
+/** Dòng chỉ vẽ lại khi thứ hiện ra thay đổi — mỗi lần làm mới (2 giây) dữ liệu là object mới. */
+const sameProc = (a: ProcessInfo, b: ProcessInfo) =>
+  a.pid === b.pid &&
+  a.createTime === b.createTime &&
+  a.name === b.name &&
+  a.cpuPct.toFixed(1) === b.cpuPct.toFixed(1) &&
+  formatBytes(a.privateBytes) === formatBytes(b.privateBytes) &&
+  a.suspended === b.suspended &&
+  a.protectedReason === b.protectedReason &&
+  a.path === b.path &&
+  samePublisher(a.publisher, b.publisher);
+
+const ROW = "cursor-pointer border-t border-black/5 dark:border-white/5";
+const rowState = (active: boolean) => (active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5");
+
+type Selection = { kind: "proc"; key: string } | { kind: "group"; key: string } | null;
+
+const ProcRow = memo(
+  function ProcRow({ p, indent, active, onSelect }: { p: ProcessInfo; indent: boolean; active: boolean; onSelect: (s: Selection) => void }) {
+    return (
+      <tr onClick={() => onSelect({ kind: "proc", key: procKey(p) })} className={`${ROW} ${rowState(active)}`}>
+        <td className={`py-1.5 pr-2 ${indent ? "pl-8" : "pl-3"}`} title={p.protectedReason ?? p.name}>
+          <div className="flex min-w-0 items-center gap-1">
+            {p.protectedReason && <IconLock className="h-3.5 w-3.5 shrink-0 opacity-60" />}
+            <span className="truncate">{p.name}</span>
+            {p.suspended && (
+              <span className="ml-1 shrink-0 rounded bg-amber-500/20 px-1.5 text-xs text-amber-700 dark:text-amber-300">Tạm dừng</span>
+            )}
+          </div>
+        </td>
+        <td className="pr-3 text-right tabular-nums opacity-70">{p.pid}</td>
+        <td className="pr-3 text-right tabular-nums">{p.cpuPct.toFixed(1)}%</td>
+        <td className="pr-3 text-right tabular-nums">{formatBytes(p.privateBytes)}</td>
+        <td className="truncate pr-3">
+          <PublisherCell p={p.publisher} />
+        </td>
+        <td className="truncate pr-3 text-xs opacity-60" title={p.path ?? undefined}>
+          {p.path}
+        </td>
+      </tr>
+    );
+  },
+  (a, b) => a.indent === b.indent && a.active === b.active && a.onSelect === b.onSelect && sameProc(a.p, b.p),
+);
+
+const GroupRow = memo(
+  function GroupRow({
+    g,
+    open,
+    active,
+    onSelect,
+    onToggle,
+  }: {
+    g: Group;
+    open: boolean;
+    active: boolean;
+    onSelect: (s: Selection) => void;
+    onToggle: (key: string) => void;
+  }) {
+    return (
+      <tr
+        onClick={() => onSelect({ kind: "group", key: g.key })}
+        onDoubleClick={() => onToggle(g.key)}
+        className={`${ROW} font-medium ${rowState(active)}`}
+      >
+        <td className="truncate py-1.5 pl-3 pr-2">
+          <button
+            type="button"
+            aria-label={open ? "Thu gọn" : "Mở rộng"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(g.key);
+            }}
+            className="mr-1 inline-flex w-4 justify-center opacity-60"
+          >
+            <IconChevron open={open} />
+          </button>
+          {g.name} <span className="font-normal opacity-60">({g.members.length})</span>
+        </td>
+        <td />
+        <td className="pr-3 text-right tabular-nums">{g.cpuPct.toFixed(1)}%</td>
+        <td className="pr-3 text-right tabular-nums">{formatBytes(g.privateBytes)}</td>
+        <td className="truncate pr-3 font-normal">
+          <PublisherCell p={g.publisher} />
+        </td>
+        <td className="truncate pr-3 text-xs font-normal opacity-60">{g.path}</td>
+      </tr>
+    );
+  },
+  (a, b) =>
+    a.open === b.open &&
+    a.active === b.active &&
+    a.onSelect === b.onSelect &&
+    a.onToggle === b.onToggle &&
+    a.g.key === b.g.key &&
+    a.g.name === b.g.name &&
+    a.g.members.length === b.g.members.length &&
+    a.g.cpuPct.toFixed(1) === b.g.cpuPct.toFixed(1) &&
+    formatBytes(a.g.privateBytes) === formatBytes(b.g.privateBytes) &&
+    a.g.path === b.g.path &&
+    samePublisher(a.g.publisher, b.g.publisher),
+);
 
 const COLUMNS: { key: SortKey; label: string; cls: string }[] = [
   { key: "name", label: "Tên", cls: "w-[28%] text-left" },
@@ -45,8 +136,6 @@ const COLUMNS: { key: SortKey; label: string; cls: string }[] = [
   { key: "publisher", label: "Publisher", cls: "w-48 text-left xl:w-64" },
   { key: "path", label: "Đường dẫn", cls: "text-left" },
 ];
-
-type Selection = { kind: "proc"; key: string } | { kind: "group"; key: string } | null;
 
 export default function Processes() {
   const [snap, setSnap] = useState<ProcessSnapshot | null>(null);
@@ -160,77 +249,34 @@ export default function Processes() {
   const onSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key === "cpu" || key === "memory" }));
 
-  const toggle = (k: string) =>
-    setExpanded((s) => {
-      const n = new Set(s);
-      if (n.has(k)) n.delete(k);
-      else n.add(k);
-      return n;
-    });
+  const toggle = useCallback(
+    (k: string) =>
+      setExpanded((s) => {
+        const n = new Set(s);
+        if (n.has(k)) n.delete(k);
+        else n.add(k);
+        return n;
+      }),
+    [],
+  );
 
   const procRow = (p: ProcessInfo, indent: boolean) => {
     const k = procKey(p);
-    const active = sel?.kind === "proc" && sel.key === k;
-    return (
-      <tr
-        key={k}
-        onClick={() => setSel({ kind: "proc", key: k })}
-        className={`cursor-pointer border-t border-black/5 dark:border-white/5 ${active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5"}`}
-      >
-        <td className={`py-1.5 pr-2 ${indent ? "pl-8" : "pl-3"}`} title={p.protectedReason ?? p.name}>
-          <div className="flex min-w-0 items-center gap-1">
-            {p.protectedReason && <span className="shrink-0 opacity-60">🔒</span>}
-            <span className="truncate">{p.name}</span>
-            {p.suspended && (
-              <span className="ml-1 shrink-0 rounded bg-amber-500/20 px-1.5 text-xs text-amber-700 dark:text-amber-300">Tạm dừng</span>
-            )}
-          </div>
-        </td>
-        <td className="pr-3 text-right tabular-nums opacity-70">{p.pid}</td>
-        <td className="pr-3 text-right tabular-nums">{p.cpuPct.toFixed(1)}%</td>
-        <td className="pr-3 text-right tabular-nums">{formatBytes(p.privateBytes)}</td>
-        <td className="truncate pr-3">
-          <PublisherCell p={p.publisher} />
-        </td>
-        <td className="truncate pr-3 text-xs opacity-60" title={p.path ?? undefined}>
-          {p.path}
-        </td>
-      </tr>
-    );
+    return <ProcRow key={k} p={p} indent={indent} active={sel?.kind === "proc" && sel.key === k} onSelect={setSel} />;
   };
 
   const groupRow = (g: Group) => {
     if (g.members.length === 1) return procRow(g.members[0], false);
     const open = expanded.has(g.key) || query.trim() !== "";
-    const active = sel?.kind === "group" && sel.key === g.key;
     return [
-      <tr
+      <GroupRow
         key={`g:${g.key}`}
-        onClick={() => setSel({ kind: "group", key: g.key })}
-        onDoubleClick={() => toggle(g.key)}
-        className={`cursor-pointer border-t border-black/5 font-medium dark:border-white/5 ${active ? "bg-accent/15" : "hover:bg-black/5 dark:hover:bg-white/5"}`}
-      >
-        <td className="truncate py-1.5 pl-3 pr-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggle(g.key);
-            }}
-            className="mr-1 inline-block w-4 opacity-60"
-          >
-            {open ? "▾" : "▸"}
-          </button>
-          {g.name} <span className="font-normal opacity-60">({g.members.length})</span>
-        </td>
-        <td />
-        <td className="pr-3 text-right tabular-nums">{g.cpuPct.toFixed(1)}%</td>
-        <td className="pr-3 text-right tabular-nums">{formatBytes(g.privateBytes)}</td>
-        <td className="truncate pr-3 font-normal">
-          <PublisherCell p={g.publisher} />
-        </td>
-        <td className="truncate pr-3 text-xs font-normal opacity-60">{g.path}</td>
-      </tr>,
+        g={g}
+        open={open}
+        active={sel?.kind === "group" && sel.key === g.key}
+        onSelect={setSel}
+        onToggle={toggle}
+      />,
       ...(open ? sortRows(g.members, sort).map((m) => procRow(m, true)) : []),
     ];
   };
@@ -239,14 +285,10 @@ export default function Processes() {
   const locked = !!p?.protectedReason;
 
   return (
-    <section className="flex h-full w-full flex-col">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Tiến trình</h1>
-          <p className="mt-1 text-sm opacity-60">
-            {snap ? `${snap.processes.length} tiến trình · CPU ${snap.totalCpuPct.toFixed(0)}% · ${snap.cpuCount} luồng CPU` : "Đang tải…"}
-          </p>
-        </div>
+    <PageShell
+      title="Tiến trình"
+      subtitle={snap ? `${snap.processes.length} tiến trình · CPU ${snap.totalCpuPct.toFixed(0)}% · ${snap.cpuCount} luồng CPU` : "Đang tải…"}
+      actions={
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} />
@@ -260,10 +302,10 @@ export default function Processes() {
             className={`w-72 xl:w-96 ${INPUT}`}
           />
         </div>
-      </div>
-
+      }
+    >
       {/* Thanh thao tác cho dòng đang chọn */}
-      <div className={`mt-4 flex min-h-11 flex-wrap items-center gap-1 px-3 py-1.5 ${SURFACE}`}>
+      <div className={`flex min-h-11 flex-wrap items-center gap-1 px-3 py-1.5 ${SURFACE}`}>
         {p && (
           <>
             <span className="mr-2 max-w-56 truncate text-sm font-medium" title={p.path ?? undefined}>
@@ -285,7 +327,7 @@ export default function Processes() {
               value=""
               disabled={busy || locked}
               onChange={(e) => e.target.value && setPriority(p, e.target.value as PriorityClass)}
-              className="h-8 cursor-pointer rounded-md bg-transparent px-2 text-sm transition hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/10"
+              className={`${SELECT} disabled:cursor-not-allowed disabled:opacity-45`}
             >
               <option value="">Ưu tiên: {p.priority ? PRIORITY_LABEL[p.priority] : "?"}</option>
               {(Object.keys(PRIORITY_LABEL) as PriorityClass[])
@@ -321,7 +363,11 @@ export default function Processes() {
             >
               Kết thúc
             </Button>
-            {locked && <span className="ml-2 text-xs opacity-60">🔒 {p.protectedReason}</span>}
+            {locked && (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs opacity-60">
+                <IconLock /> {p.protectedReason}
+              </span>
+            )}
           </>
         )}
         {selectedGroup && (
@@ -382,6 +428,6 @@ export default function Processes() {
       </div>
 
       <ConfirmDialog req={confirm} onClose={() => setConfirm(null)} />
-    </section>
+    </PageShell>
   );
 }

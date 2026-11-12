@@ -2,7 +2,7 @@
 //!
 //! Bọc `std::os::windows::io::OwnedHandle` (I/O safety, Rust 1.63+) thay vì tự
 //! cài `Drop` + `unsafe impl Send/Sync`: std đã đảm bảo đóng đúng một lần và
-//! an toàn đa luồng (unsafe-checker io-01, safety-05).
+//! an toàn đa luồng.
 
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle as StdOwnedHandle};
 

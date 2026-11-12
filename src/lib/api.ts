@@ -138,7 +138,8 @@ export type StartupSource =
   | "startupFolderUser"
   | "startupFolderCommon"
   | "scheduledTask"
-  | "service";
+  | "service"
+  | "packagedTask";
 
 export interface StartupEntry {
   id: string;
@@ -197,6 +198,8 @@ export interface CleanerProgress {
   current: string;
   files: number;
   bytes: number;
+  /** Khi dọn: tổng số file của các rule đã chọn (0 khi quét). */
+  totalFiles: number;
 }
 
 export interface RuleClean {
@@ -240,6 +243,8 @@ export interface InstalledApp {
   lastUsedMs: number | null;
   lastUsedSource: UsageSource | null;
   canUninstall: boolean;
+  /** App Store (MSIX): chỉ xem, gỡ trong Windows Settings. */
+  storeApp: boolean;
 }
 
 /** Tiến độ tải danh sách ứng dụng: số app đã đo / tổng. */
@@ -293,6 +298,12 @@ export interface UninstallFinished {
   timedOut: boolean;
 }
 
+export interface LeftoverProgress {
+  done: number;
+  total: number;
+  current: string;
+}
+
 export interface LeftoverReport {
   recycled: number;
   recycledBytes: number;
@@ -335,6 +346,8 @@ export interface SystemCleanReport {
   exitCode: number;
   rebootRequired: boolean;
   durationMs: number;
+  /** Backend: tăng dưới ngưỡng (16 MB) => coi như không lấy lại được gì. */
+  nothingFreed: boolean;
 }
 
 export interface WindowsOldInfo {
@@ -391,7 +404,8 @@ export interface DupScan {
 }
 
 export interface DiskProgress {
-  phase: "walk" | "head" | "full";
+  /** recycle: chuyển vào Thùng rác — done/total là số file. */
+  phase: "walk" | "head" | "full" | "recycle";
   files: number;
   bytes: number;
   done: number;
@@ -403,6 +417,31 @@ export interface RecycleReport {
   recycledBytes: number;
   failed: number;
   items: { id: number; ok: boolean; message: string | null }[];
+  /** Bị huỷ giữa chừng: file chưa xử lý không có trong `items`. */
+  cancelled: boolean;
+}
+
+// ---- Cập nhật ---------------------------------------------------------------
+
+export interface UpdateAvailable {
+  version: string;
+  /** "Có gì mới" từ latest.json. */
+  notes: string | null;
+  dateMs: number | null;
+}
+
+export interface UpdateInfo {
+  current: string;
+  available: UpdateAvailable | null;
+  auto: boolean;
+  lastCheckMs: number | null;
+  /** Bản build có khoá kiểm chữ ký cập nhật. */
+  configured: boolean;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
 }
 
 // ---- Settings ---------------------------------------------------------------
@@ -529,7 +568,7 @@ export interface DiagProgress {
 
 // ---- Tác vụ dài: backend ghi lại để cửa sổ mở lại nối lại được (xem src-tauri/src/jobs.rs) ----
 
-export type JobKind = "diagnosis.scan" | "cleaner.scan" | "cleaner.clean" | "winsxs.analyze" | "winsxs.clean" | "winold.clean" | "disk.large" | "disk.dups";
+export type JobKind = "diagnosis.scan" | "cleaner.scan" | "cleaner.clean" | "winsxs.analyze" | "winsxs.clean" | "winold.clean" | "disk.large" | "disk.dups" | "disk.recycle" | "apps.list" | "apps.leftovers";
 
 export type JobOutcome = { ok: true; value: unknown } | { ok: false; value: unknown };
 
@@ -594,6 +633,8 @@ export const api = {
   processOpenLocation: (p: ProcessRef) => invoke<ProcessActionOutcome>("process_open_location", { target: ref(p) }),
 
   startupList: () => invoke<StartupEntry[]>("startup_list"),
+  /** Mở tab Startup của Task Manager (bật/tắt app Store). */
+  startupOpenSettings: () => invoke<void>("startup_open_settings"),
   startupSetEnabled: (e: StartupEntry, enabled: boolean) =>
     invoke<void>("startup_set_enabled", { source: e.source, name: e.keyName, enabled }),
 
@@ -605,14 +646,18 @@ export const api = {
   cleanerCancel: () => invoke<void>("cleaner_cancel"),
 
   appsList: (onProgress?: (p: AppsProgress) => void) =>
-    invoke<AppsOverview>("apps_list", { onProgress: channel(onProgress ?? (() => {})) }),
+    tracked("apps.list", () => invoke<AppsOverview>("apps_list", { onProgress: channel(onProgress ?? (() => {})) })),
   /** Mở trình gỡ cài đặt của app; trả về tên app. */
   appsUninstall: (id: string) => invoke<string>("apps_uninstall", { id }),
+  /** Mở Settings → Apps (gỡ app Store). */
+  appsOpenSettings: () => invoke<void>("apps_open_settings"),
   /** Backend tự tìm phần còn sót và giữ kết quả. */
   appsLeftoversScan: (id: string) => invoke<LeftoverScan>("apps_leftovers_scan", { id }),
   /** Chỉ gửi scanId + id mục — file vào Thùng rác, key registry được sao lưu .reg trước. */
-  appsLeftoversClean: (scanId: number, itemIds: number[]) =>
-    invoke<LeftoverReport>("apps_leftovers_clean", { scanId, itemIds }),
+  appsLeftoversClean: (scanId: number, itemIds: number[], onProgress?: (p: LeftoverProgress) => void) =>
+    tracked("apps.leftovers", () =>
+      invoke<LeftoverReport>("apps_leftovers_clean", { scanId, itemIds, onProgress: channel(onProgress ?? (() => {})) }),
+    ),
 
   onUninstallFinished: (cb: (e: UninstallFinished) => void): Promise<UnlistenFn> =>
     listen<UninstallFinished>("apps://uninstall-finished", (e) => cb(e.payload)),
@@ -633,7 +678,14 @@ export const api = {
     tracked("disk.dups", () => invoke<DupScan>("disk_scan_duplicates", { root, minBytes, onProgress: channel(onProgress) })),
   diskCancel: () => invoke<void>("disk_cancel"),
   /** Chỉ gửi scanId + id file — backend chuyển vào Thùng rác (khôi phục được). */
-  diskRecycle: (scanId: number, fileIds: number[]) => invoke<RecycleReport>("disk_recycle", { scanId, fileIds }),
+  diskRecycle: (scanId: number, fileIds: number[], onProgress?: (p: DiskProgress) => void) =>
+    tracked("disk.recycle", () => invoke<RecycleReport>("disk_recycle", { scanId, fileIds, onProgress: channel(onProgress ?? (() => {})) })),
+
+  /** force = false: chỉ hỏi GitHub nếu đang bật tự kiểm tra và đã quá 1 ngày. */
+  updateCheck: (force: boolean) => invoke<UpdateInfo>("update_check", { force }),
+  updateSetAuto: (enabled: boolean) => invoke<UpdateInfo>("update_set_auto", { enabled }),
+  /** Thành công => app thoát, bộ cài chạy (UAC) rồi mở lại app; chỉ trả về khi lỗi. */
+  updateInstall: (onProgress: (p: UpdateProgress) => void) => invoke<void>("update_install", { onProgress: channel(onProgress) }),
 
   settingsGet: () => invoke<GeneralSettings>("settings_get"),
   settingsSetAutoClean: (enabled: boolean, intervalDays: number, ruleIds: string[]) =>

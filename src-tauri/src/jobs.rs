@@ -25,7 +25,7 @@ pub const EVENT_JOB: &str = "jobs://update";
 const PROGRESS_EVERY: Duration = Duration::from_millis(200);
 
 /// Các loại tác vụ được theo dõi. Chuỗi trùng với `JobKind` phía UI.
-pub const KINDS: &[&str] = &["diagnosis.scan", "cleaner.scan", "cleaner.clean", "winsxs.analyze", "winsxs.clean", "winold.clean", "disk.large", "disk.dups"];
+pub const KINDS: &[&str] = &["diagnosis.scan", "cleaner.scan", "cleaner.clean", "winsxs.analyze", "winsxs.clean", "winold.clean", "disk.large", "disk.dups", "disk.recycle", "apps.list", "apps.leftovers"];
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

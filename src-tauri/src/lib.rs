@@ -29,6 +29,7 @@ pub mod memory;
 pub mod process;
 pub mod startup;
 pub mod store;
+pub mod update;
 pub mod usage;
 
 use std::time::Duration;
@@ -83,36 +84,52 @@ const TRIM_AFTER_CLOSE: Duration = Duration::from_secs(5);
 
 /// Kiểm tra lịch dọn tự động mỗi 30 phút (rất nhẹ: chỉ đọc 1 dòng SQLite).
 const AUTO_CLEAN_CHECK: Duration = Duration::from_secs(30 * 60);
+/// Lần kiểm tra đầu sau khi mở app: sớm (phiên dùng máy ngắn hơn 30 phút vẫn được dọn) nhưng không
+/// tranh tài nguyên lúc Windows vừa khởi động.
+const AUTO_CLEAN_FIRST_CHECK: Duration = Duration::from_secs(2 * 60);
+
+/// Thời gian chờ trước một lần kiểm tra lịch dọn.
+fn auto_clean_wait(first: bool) -> Duration {
+    if first {
+        AUTO_CLEAN_FIRST_CHECK
+    } else {
+        AUTO_CLEAN_CHECK
+    }
+}
 
 fn spawn_auto_clean(app: AppHandle) {
     std::thread::Builder::new()
         .name("auto-clean".into())
-        .spawn(move || loop {
-            std::thread::sleep(AUTO_CLEAN_CHECK);
-            let state = app.state::<AppState>();
-            let mut cfg = settings::AutoClean::load(&state.store);
-            if !cfg.due(settings::now_ms()) {
-                continue;
+        .spawn(move || {
+            let mut first = true;
+            loop {
+                std::thread::sleep(auto_clean_wait(first));
+                first = false;
+                let state = app.state::<AppState>();
+                let mut cfg = settings::AutoClean::load(&state.store);
+                if !cfg.due(settings::now_ms()) {
+                    continue;
+                }
+                // Ghi mốc chạy TRƯỚC khi dọn: nếu lượt này lỗi thì đợi tới kỳ sau, không lặp lỗi mỗi 30 phút.
+                let previous_run = cfg.last_run_ms;
+                cfg.last_run_ms = Some(settings::now_ms());
+                let _ = cfg.save(&state.store);
+                let result = sync::survive("auto-clean", || state.cleaner.auto_clean(&state.store, &cfg.rule_ids))
+                    .unwrap_or_else(|| Err(error::AppError::Internal("dọn rác tự động".into())));
+                // Người dùng đang quét/dọn tay => lượt này chưa chạy: trả lại mốc cũ để lần kiểm tra sau
+                // (30 phút) thử lại, thay vì bỏ cả kỳ (1/7/30 ngày). Đọc lại cài đặt vì có thể vừa bị đổi.
+                if matches!(result, Err(error::AppError::Busy(_))) {
+                    let mut latest = settings::AutoClean::load(&state.store);
+                    latest.last_run_ms = previous_run;
+                    let _ = latest.save(&state.store);
+                    continue;
+                }
+                let detail = match &result {
+                    Ok(r) => format!("{} file, {} byte", r.deleted_files, r.freed_bytes),
+                    Err(e) => e.to_string(),
+                };
+                state.store.log_action_best_effort("cleaner.auto", &cfg.rule_ids.join(","), result.is_ok(), &detail);
             }
-            // Ghi mốc chạy TRƯỚC khi dọn: nếu lượt này lỗi thì đợi tới kỳ sau, không lặp lỗi mỗi 30 phút.
-            let previous_run = cfg.last_run_ms;
-            cfg.last_run_ms = Some(settings::now_ms());
-            let _ = cfg.save(&state.store);
-            let result = sync::survive("auto-clean", || state.cleaner.auto_clean(&state.store, &cfg.rule_ids))
-                .unwrap_or_else(|| Err(error::AppError::Internal("dọn rác tự động".into())));
-            // Người dùng đang quét/dọn tay => lượt này chưa chạy: trả lại mốc cũ để lần kiểm tra sau
-            // (30 phút) thử lại, thay vì bỏ cả kỳ (1/7/30 ngày). Đọc lại cài đặt vì có thể vừa bị đổi.
-            if matches!(result, Err(error::AppError::Busy(_))) {
-                let mut latest = settings::AutoClean::load(&state.store);
-                latest.last_run_ms = previous_run;
-                let _ = latest.save(&state.store);
-                continue;
-            }
-            let detail = match &result {
-                Ok(r) => format!("{} file, {} byte", r.deleted_files, r.freed_bytes),
-                Err(e) => e.to_string(),
-            };
-            state.store.log_action_best_effort("cleaner.auto", &cfg.rule_ids.join(","), result.is_ok(), &detail);
         })
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("không tạo được thread auto clean: {e}"));
@@ -155,6 +172,8 @@ pub fn run() {
     };
 
     let result = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(commands::update::PendingUpdate::default())
         .setup(move |app| {
             // Nâng quyền bằng tài khoản admin khác (máy domain): tài khoản đó chỉ để lấy quyền,
             // cài đặt/lịch sử vẫn thuộc user đang đăng nhập => dùng AppData\Roaming của user đó.
@@ -228,6 +247,11 @@ pub fn run() {
             commands::cleaner::system_clean_windows_old,
             commands::apps::apps_list,
             commands::apps::apps_uninstall,
+            commands::apps::apps_open_settings,
+            commands::startup::startup_open_settings,
+            commands::update::update_check,
+            commands::update::update_set_auto,
+            commands::update::update_install,
             commands::apps::apps_leftovers_scan,
             commands::apps::apps_leftovers_clean,
             commands::disk::disk_drives,
@@ -254,5 +278,16 @@ pub fn run() {
             eprintln!("Không khởi động được PC Manager: {e}");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_clean_checks_early_then_every_30_minutes() {
+        assert_eq!(auto_clean_wait(true), Duration::from_secs(120));
+        assert_eq!(auto_clean_wait(false), Duration::from_secs(30 * 60));
     }
 }

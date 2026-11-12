@@ -99,3 +99,54 @@ export const IconPulse = (p: { className?: string }) => (
     <path d="M3.5 12h4l1.5-3 3 6 1.5-3h7" />
   </Icon>
 );
+
+// ---- Biểu tượng nhỏ trong dòng chữ (thay emoji/ký tự phụ thuộc font máy) ----
+// Mặc định 1em để khớp cỡ chữ xung quanh; căn giữa theo dòng bằng `align-[-0.125em]`.
+const INLINE = "inline-block h-[1em] w-[1em] align-[-0.125em]";
+
+export const IconLock = ({ className = INLINE }: { className?: string }) => (
+  <Icon className={className}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </Icon>
+);
+
+export const IconCheck = ({ className = INLINE }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Icon>
+);
+
+export const IconX = ({ className = INLINE }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </Icon>
+);
+
+export const IconRefresh = ({ className = INLINE }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+    <path d="M20 4v5h-5" />
+  </Icon>
+);
+
+/** Mũi tên gập: `open` = trỏ xuống (đang mở), không thì trỏ sang phải. */
+export const IconChevron = ({ open = false, className = INLINE }: { open?: boolean; className?: string }) => (
+  <Icon className={`${className} transition-transform ${open ? "rotate-90" : ""}`}>
+    <path d="m9 6 6 6-6 6" />
+  </Icon>
+);
+
+export const IconWarning = ({ className = INLINE }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M12 3.5 2.5 20h19L12 3.5Z" />
+    <path d="M12 10v4.5M12 17.2v.3" />
+  </Icon>
+);
+
+export const IconInfo = ({ className = INLINE }: { className?: string }) => (
+  <Icon className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5.5M12 7.8v.3" />
+  </Icon>
+);

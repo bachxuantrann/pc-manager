@@ -27,7 +27,7 @@ pub struct MemoryStatus {
 pub fn status_from(basic: BasicMemory, lists: Option<MemoryLists>) -> MemoryStatus {
     let page = basic.page_size;
     let bytes = |pages: u64| pages.saturating_mul(page);
-    // Dữ liệu từ OS: kẹp lại cho chắc (unsafe-checker ffi-15).
+    // Dữ liệu từ OS: không tin là luôn hợp lệ, kẹp lại cho chắc.
     let total = basic.total_phys;
     let available = basic.avail_phys.min(total);
     MemoryStatus {
@@ -95,7 +95,7 @@ pub fn should_smart_boost(s: &MemoryStatus, threshold: SmartThreshold) -> bool {
     u128::from(s.available) * 100 < u128::from(s.total) * u128::from(threshold.get())
 }
 
-/// Ngưỡng Smart Boost đã được kiểm tra hợp lệ (newtype — m05-type-driven).
+/// Ngưỡng Smart Boost đã được kiểm tra hợp lệ (newtype: giá trị sai không tạo được, nên hàm nhận nó khỏi phải kiểm tra lại).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct SmartThreshold(u8);

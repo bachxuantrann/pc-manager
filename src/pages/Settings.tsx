@@ -1,3 +1,4 @@
+import { IconCheck, IconRefresh, IconX } from "../components/Icons";
 import { INPUT, PANEL, SELECT } from "../components/ui";
 import { useCallback, useEffect, useState } from "react";
 import Button from "../components/Button";
@@ -6,6 +7,7 @@ import PageShell from "../components/PageShell";
 import { AdminNotice } from "../components/Elevation";
 import { api, errorMessage, type ActionLogEntry, type AppInfo, type GeneralSettings } from "../lib/api";
 import { SmartSettings } from "./Memory";
+import { UpdateSettings } from "../components/UpdatePanel";
 import { useTheme, type ThemePref } from "../lib/theme";
 
 const INTERVALS = [
@@ -200,7 +202,7 @@ function ActivityLog() {
     <div className="text-sm">
       <div className="mb-2 flex justify-end">
         <Button variant="ghost" size="sm" onClick={load}>
-          ↻ Tải lại
+          <IconRefresh /> Tải lại
         </Button>
       </div>
       <div className={`max-h-80 overflow-auto ${PANEL}`}>
@@ -211,7 +213,7 @@ function ActivityLog() {
                 <td className="w-36 px-3 py-1 tabular-nums opacity-60">{new Date(a.ts).toLocaleString("vi-VN")}</td>
                 <td className="w-44 px-2 py-1 font-mono">{a.action}</td>
                 <td className="truncate px-2 py-1">{a.target}</td>
-                <td className={`w-10 px-2 py-1 ${a.ok ? "text-green-600" : "text-red-600"}`}>{a.ok ? "✓" : "✗"}</td>
+                <td className={`w-10 px-2 py-1 ${a.ok ? "text-green-600" : "text-red-600"}`}>{a.ok ? <IconCheck /> : <IconX />}</td>
               </tr>
             ))}
             {items?.length === 0 && (
@@ -266,7 +268,7 @@ export default function Settings() {
   }, []);
 
   return (
-    <PageShell title="Cài đặt" subtitle="Smart Boost, dọn tự động, khởi động cùng Windows, thư mục bảo vệ.">
+    <PageShell title="Cài đặt" subtitle="Smart Boost, dọn tự động, khởi động cùng Windows, cập nhật, thư mục bảo vệ.">
       {err && <Notice tone="error">{err}</Notice>}
       {/*
         Hai cột, card cùng hàng cao bằng nhau (grid mặc định stretch): ghép các card có độ cao gần
@@ -281,6 +283,9 @@ export default function Settings() {
           <SmartSettings />
         </Card>
         <Card title="Lịch dọn tự động">{s && <AutoCleanSettings s={s} onChange={setS} />}</Card>
+        <Card title="Cập nhật" className="xl:col-span-2">
+          <UpdateSettings />
+        </Card>
         <Card title="Thư mục bảo vệ (whitelist)" className="xl:col-span-2">
           {s && <WhitelistSettings s={s} onChange={setS} />}
         </Card>

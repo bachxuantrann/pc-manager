@@ -1,3 +1,4 @@
+import { IconRefresh } from "../components/Icons";
 import { INPUT, SELECT, SURFACE, THEAD, pill } from "../components/ui";
 import { useReportBusy } from "../hooks/usePageActive";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -8,7 +9,17 @@ import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog"
 import LeftoverDialog, { type LeftoverTarget } from "../components/LeftoverDialog";
 import { AdminNotice } from "../components/Elevation";
 import PageShell from "../components/PageShell";
-import { api, errorMessage, type AppsOverview, type AppsProgress, type InstalledApp, type UsageSource } from "../lib/api";
+import { useJobResume } from "../hooks/useJobResume";
+import {
+  api,
+  errorMessage,
+  type AppsOverview,
+  type AppsProgress,
+  type InstalledApp,
+  type LeftoverProgress,
+  type LeftoverReport,
+  type UsageSource,
+} from "../lib/api";
 import { daysAgo, formatBytes, formatDate, relativeDays } from "../lib/format";
 
 type SortKey = "size" | "name" | "lastUsed" | "installed";
@@ -73,7 +84,59 @@ export default function Apps() {
       .catch((e) => setError(errorMessage(e)))
       .finally(() => setLoading(false));
   }, []);
-  useEffect(load, [load]);
+  // Mở trang: nếu backend đang/đã đọc danh sách (cửa sổ trước bị đóng giữa chừng) thì nối lại
+  // (useJobResume bên dưới) thay vì chạy lần thứ hai.
+  useEffect(() => {
+    let alive = true;
+    api
+      .jobsSnapshot()
+      .then((list) => alive && !list.some((j) => j.kind === "apps.list") && load())
+      .catch(() => alive && load());
+    return () => {
+      alive = false;
+    };
+  }, [load]);
+  useJobResume<AppsProgress>("apps.list", {
+    onRunning: (p) => {
+      setLoading(true);
+      setLoadProgress(p);
+    },
+    onProgress: setLoadProgress,
+    onDone: (o) => {
+      setLoading(false);
+      if (o.ok) {
+        setData(o.value as AppsOverview);
+        setError(null);
+      } else setError(errorMessage(o.value));
+    },
+  });
+  // Đóng cửa sổ lúc đang dọn phần còn sót rồi mở lại: hiện tiến độ / kết quả ở đầu trang.
+  const [leftoverProgress, setLeftoverProgress] = useState<LeftoverProgress | null>(null);
+  const [leftoverRunning, setLeftoverRunning] = useState(false);
+  useReportBusy(leftoverRunning);
+  useJobResume<LeftoverProgress>("apps.leftovers", {
+    onRunning: (p) => {
+      setLeftoverRunning(true);
+      setLeftoverProgress(p);
+    },
+    onProgress: setLeftoverProgress,
+    onDone: (o) => {
+      setLeftoverRunning(false);
+      setLeftoverProgress(null);
+      if (o.ok) {
+        const r = o.value as LeftoverReport;
+        setMsg({
+          tone: r.failed ? "error" : "ok",
+          text:
+            `Dọn phần còn sót xong: ${r.recycled} mục (${formatBytes(r.recycledBytes)}) vào Thùng rác` +
+            (r.registryRemoved ? ", đã xoá mục registry (có sao lưu .reg)" : "") +
+            (r.failed ? `, ${r.failed} mục lỗi` : "") +
+            ".",
+        });
+        load();
+      } else setError(errorMessage(o.value));
+    },
+  });
 
   // Trình gỡ chạy xong: tải lại danh sách; gỡ thành công thì mở luôn "Dọn phần còn sót".
   useEffect(() => {
@@ -173,7 +236,7 @@ export default function Apps() {
             className={`w-64 xl:w-80 ${INPUT}`}
           />
           <Button variant="ghost" size="sm" className="shrink-0" loading={loading} onClick={load}>
-            {!loading && "↻ "}Tải lại
+            {!loading && <IconRefresh />}Tải lại
           </Button>
           {/* Ở hàng trên cùng (không ở hàng bộ lọc): ô "Gồm cả app chưa rõ lần dùng" hiện/ẩn không đẩy nó xuống dòng. */}
           <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm">
@@ -224,6 +287,14 @@ export default function Apps() {
         </div>
       )}
 
+      {leftoverRunning && (
+        <Card className="mt-3">
+          <ProgressBar
+            pct={leftoverProgress && leftoverProgress.total > 0 ? (leftoverProgress.done / leftoverProgress.total) * 100 : null}
+            label={leftoverProgress ? `Đang dọn phần còn sót ${leftoverProgress.done + 1} / ${leftoverProgress.total}: ${leftoverProgress.current}` : "Đang dọn phần còn sót…"}
+          />
+        </Card>
+      )}
       {(msg || error) && (
         <div className="mt-3">
           <Notice
@@ -272,7 +343,9 @@ export default function Apps() {
                   <tr key={a.id} className="border-t border-black/5 hover:bg-black/[0.03] dark:border-white/5 dark:hover:bg-white/[0.03]">
                     <td className="px-4 py-2" title={a.installLocation ?? undefined}>
                       <div className="truncate font-medium">{a.name}</div>
-                      <div className="truncate text-xs opacity-60">{[a.publisher, a.version].filter(Boolean).join(" · ") || "—"}</div>
+                      <div className="truncate text-xs opacity-60">
+                        {[a.storeApp ? "App Store" : null, a.publisher, a.version].filter(Boolean).join(" · ") || "—"}
+                      </div>
                     </td>
                     <td className="px-3 text-right tabular-nums" title={a.sizeMeasured ? "Đo thực tế thư mục cài đặt" : "Theo số ứng dụng khai báo"}>
                       {a.sizeBytes != null ? `${a.sizeMeasured ? "" : "≈ "}${formatBytes(a.sizeBytes)}` : <span className="opacity-40">—</span>}
@@ -282,26 +355,39 @@ export default function Apps() {
                       <LastUsed a={a} />
                     </td>
                     <td className="whitespace-nowrap px-3 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busyId !== null}
-                        title="Tìm thư mục, shortcut, registry còn sót của app — chuyển vào Thùng rác"
-                        onClick={() => setLeftoverApp(a)}
-                      >
-                        Dọn sót
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 dark:text-red-400"
-                        disabled={!a.canUninstall || busyId !== null || uninstalling.has(a.id)}
-                        loading={busyId === a.id || uninstalling.has(a.id)}
-                        title={a.canUninstall ? undefined : "Ứng dụng này không cho phép gỡ từ đây"}
-                        onClick={() => uninstall(a)}
-                      >
-                        {uninstalling.has(a.id) ? "Đang gỡ…" : "Gỡ cài đặt"}
-                      </Button>
+                      {a.storeApp ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="App Store do Windows quản lý — mở Settings → Apps để gỡ"
+                          onClick={() => api.appsOpenSettings().catch((e) => setError(errorMessage(e)))}
+                        >
+                          Gỡ trong Settings
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busyId !== null}
+                            title="Tìm thư mục, shortcut, registry còn sót của app — chuyển vào Thùng rác"
+                            onClick={() => setLeftoverApp(a)}
+                          >
+                            Dọn sót
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 dark:text-red-400"
+                            disabled={!a.canUninstall || busyId !== null || uninstalling.has(a.id)}
+                            loading={busyId === a.id || uninstalling.has(a.id)}
+                            title={a.canUninstall ? undefined : "Ứng dụng này không cho phép gỡ từ đây"}
+                            onClick={() => uninstall(a)}
+                          >
+                            {uninstalling.has(a.id) ? "Đang gỡ…" : "Gỡ cài đặt"}
+                          </Button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

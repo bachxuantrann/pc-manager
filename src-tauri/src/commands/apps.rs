@@ -5,7 +5,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use crate::usage::leftovers::{LeftoverReport, LeftoverScan};
+use crate::jobs;
+use crate::usage::leftovers::{LeftoverProgress, LeftoverReport, LeftoverScan};
 use crate::sync::LockExt;
 use crate::usage::{self, installed, AppsOverview, AppsProgress};
 use tauri::ipc::Channel;
@@ -14,21 +15,25 @@ use tauri::ipc::Channel;
 /// trên pool nền ưu tiên thấp.
 #[tauri::command]
 pub async fn apps_list(app: AppHandle, on_progress: Channel<AppsProgress>) -> AppResult<AppsOverview> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
+    jobs::run(app, "apps.list", "đọc danh sách ứng dụng", Some(on_progress), |state, report| {
         // Gửi tối đa ~10 lần/giây (và luôn gửi lần cuối) để không dồn sự kiện khi có hàng trăm app.
         let last = std::sync::Mutex::new(std::time::Instant::now() - Duration::from_secs(1));
-        let report = |p: AppsProgress| {
+        let throttled = |p: AppsProgress| {
             let mut t = last.lock_recover();
             if p.done == p.total || t.elapsed() >= Duration::from_millis(100) {
                 *t = std::time::Instant::now();
-                let _ = on_progress.send(p);
+                report(p);
             }
         };
-        crate::bg::pool()?.install(|| usage::list(&state.store, &report))
+        crate::bg::pool()?.install(|| usage::list(&state.store, &throttled))
     })
     .await
-    .map_err(|e| crate::error::task_failed("đọc danh sách ứng dụng", e))?
+}
+
+/// Mở Windows Settings → Apps (gỡ app Store). Không nhận tham số từ UI.
+#[tauri::command]
+pub async fn apps_open_settings() -> AppResult<()> {
+    super::open_ms_settings("ms-settings:appsfeatures")
 }
 
 /// Phát ra khi trình gỡ cài đặt (và mọi tiến trình con) đã kết thúc.
@@ -101,14 +106,17 @@ pub async fn apps_leftovers_scan(app: AppHandle, id: String) -> AppResult<Leftov
 /// Chuyển các mục đã chọn vào Thùng rác (key registry: sao lưu .reg rồi xoá).
 /// Chỉ nhận `scanId` + id mục — không nhận đường dẫn.
 #[tauri::command]
-pub async fn apps_leftovers_clean(app: AppHandle, scan_id: u64, item_ids: Vec<u32>) -> AppResult<LeftoverReport> {
+pub async fn apps_leftovers_clean(
+    app: AppHandle,
+    scan_id: u64,
+    item_ids: Vec<u32>,
+    on_progress: Channel<LeftoverProgress>,
+) -> AppResult<LeftoverReport> {
     if item_ids.is_empty() || item_ids.len() > 500 {
         return Err(AppError::InvalidInput("chưa chọn mục nào".into()));
     }
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
-        state.leftovers.clean(&state.store, scan_id, &item_ids)
+    jobs::run(app, "apps.leftovers", "dọn phần còn sót", Some(on_progress), move |state, report| {
+        state.leftovers.clean(&state.store, scan_id, &item_ids, &|p| report(p))
     })
     .await
-    .map_err(|e| crate::error::task_failed("dọn phần còn sót", e))?
 }

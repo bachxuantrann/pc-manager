@@ -8,7 +8,7 @@ use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITH
 /// Gọi `CoUninitialize` khi drop — chỉ khi chính ta đã init thành công.
 ///
 /// `PhantomData<*const ()>` làm struct không `Send`/`Sync`: COM init gắn với
-/// thread, drop phải xảy ra trên cùng thread (unsafe-checker safety-05).
+/// thread, drop phải xảy ra trên cùng thread đã init.
 pub struct ComGuard {
     owns: bool,
     _not_send: PhantomData<*const ()>,

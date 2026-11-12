@@ -99,34 +99,9 @@ fn account_sid(domain: &str, name: &str) -> Option<String> {
     sid_to_string(psid)
 }
 
-/// Thay `%BIẾN%` bằng biến môi trường (ProfileImagePath dạng `%SystemDrive%\Users\x`).
+/// Thay `%BIẾN%` bằng biến môi trường của tiến trình (ProfileImagePath dạng `%SystemDrive%\Users\x`).
 fn expand_env(s: &str) -> String {
-    let mut out = String::new();
-    let mut rest = s;
-    while let Some(start) = rest.find('%') {
-        out.push_str(rest.get(..start).unwrap_or_default());
-        let after = rest.get(start + 1..).unwrap_or_default();
-        match after.find('%') {
-            Some(end) => {
-                let name = after.get(..end).unwrap_or_default();
-                match std::env::var(name) {
-                    Ok(v) if !name.is_empty() => out.push_str(&v),
-                    _ => {
-                        out.push('%');
-                        out.push_str(name);
-                        out.push('%');
-                    }
-                }
-                rest = after.get(end + 1..).unwrap_or_default();
-            }
-            None => {
-                out.push('%');
-                rest = after;
-            }
-        }
-    }
-    out.push_str(rest);
-    out
+    crate::startup::command::expand_env(s, |k| std::env::var(k).ok())
 }
 
 /// Thư mục shell `value` ("Local AppData", "AppData") của user có SID `sid` (hive của user
@@ -199,6 +174,10 @@ mod tests {
 
     #[test]
     fn same_user_is_not_reported() {
+        if crate::user::is_other_user() {
+            println!("bỏ qua: test đang chạy bằng tài khoản admin khác user đang đăng nhập");
+            return;
+        }
         // Test chạy dưới chính user đang đăng nhập => không có "user khác".
         assert!(other_interactive_user_local_appdata().is_none());
         assert!(other_interactive_user_roaming_appdata().is_none());
@@ -206,6 +185,10 @@ mod tests {
 
     #[test]
     fn session_user_resolves_to_own_sid() {
+        if crate::user::is_other_user() {
+            println!("bỏ qua: test đang chạy bằng tài khoản admin khác user đang đăng nhập");
+            return;
+        }
         // Bảo đảm `same_user_is_not_reported` đạt vì so sánh đúng, không phải vì tra cứu lỗi.
         let name = session_info(WTSUserName).expect("đọc được tên user của phiên");
         let domain = session_info(WTSDomainName).unwrap_or_default();

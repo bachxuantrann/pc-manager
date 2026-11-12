@@ -32,6 +32,24 @@ pub fn all_tasks(com: &ComGuard) -> windows::core::Result<Vec<LogonTask>> {
     list(com, false)
 }
 
+/// Có task tên `name` ở thư mục gốc của Task Scheduler (thay `schtasks /Query`: không sinh tiến trình).
+/// Không đọc được (thiếu quyền, dịch vụ lỗi) => false, như `schtasks` báo lỗi.
+pub fn task_exists(_com: &ComGuard, name: &str) -> bool {
+    let found = || -> windows::core::Result<()> {
+        // SAFETY: COM đã init (bằng chứng `_com`); CLSID/IID khớp.
+        let svc: ITaskService = unsafe { CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER)? };
+        let empty = VARIANT::default();
+        // SAFETY: VARIANT rỗng = máy local, user hiện tại; BSTR hợp lệ sống tới hết lời gọi.
+        unsafe {
+            svc.Connect(&empty, &empty, &empty, &empty)?;
+            let root = svc.GetFolder(&BSTR::from("\\"))?;
+            root.GetTask(&BSTR::from(name))?;
+        }
+        Ok(())
+    };
+    found().is_ok()
+}
+
 fn list(_com: &ComGuard, logon_only: bool) -> windows::core::Result<Vec<LogonTask>> {
     // SAFETY: COM đã init (bằng chứng `_com`); CLSID/IID khớp.
     let svc: ITaskService = unsafe { CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER)? };
@@ -127,6 +145,12 @@ fn read_task(t: &IRegisteredTask, logon_only: bool) -> Option<LogonTask> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_task_does_not_exist() {
+        let com = ComGuard::init().unwrap();
+        assert!(!task_exists(&com, "PC Manager khong co task nay 7f3a"));
+    }
 
     #[test]
     fn enumerates_without_error() {

@@ -8,6 +8,7 @@
 
 pub mod approved;
 pub mod command;
+pub mod packaged;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -42,6 +43,8 @@ pub enum Source {
     StartupFolderCommon,
     ScheduledTask,
     Service,
+    /// Startup task của app Store (MSIX/UWP) — chỉ đọc ở v1.
+    PackagedTask,
 }
 
 #[derive(Clone, Copy)]
@@ -166,6 +169,7 @@ pub fn list(publishers: &PublisherCache) -> AppResult<Vec<StartupEntry>> {
     for s in [Source::StartupFolderUser, Source::StartupFolderCommon] {
         out.extend(read_folder(&ctx, &com, s));
     }
+    out.extend(read_packaged(&ctx));
     out.extend(read_tasks(&ctx, &com));
     out.extend(read_services(&ctx));
     Ok(out)
@@ -198,7 +202,40 @@ pub fn enabled_app_count() -> usize {
             .filter(|name| approved::parse(states.get(&name.to_lowercase()).map(Vec::as_slice)).enabled)
             .count();
     }
+    if let Ok(hkcu) = crate::user::hkcu() {
+        n += packaged::states(&hkcu).into_iter().filter(|(_, _, st)| packaged::state_enabled(*st)).count();
+    }
     n
+}
+
+/// Tên hiển thị của shortcut: bỏ đuôi `.lnk` không phân biệt hoa thường (`.Lnk`, `.LNK`…).
+fn strip_lnk(name: &str) -> &str {
+    match name.len().checked_sub(4).and_then(|i| name.get(i..).map(|ext| (i, ext))) {
+        Some((i, ext)) if ext.eq_ignore_ascii_case(".lnk") => name.get(..i).unwrap_or(name),
+        _ => name,
+    }
+}
+
+/// Startup task của app Store (tab "Ứng dụng" như Task Manager). Chỉ đọc.
+fn read_packaged(ctx: &Ctx) -> Vec<StartupEntry> {
+    let Ok(hkcu) = crate::user::hkcu() else { return Vec::new() };
+    packaged::list(&hkcu, &crate::user::hkcu_reg_root())
+        .into_iter()
+        .map(|t| StartupEntry {
+            id: format!(r"PackagedTask:{}\{}", t.family, t.task_id),
+            key_name: String::new(),
+            name: t.name,
+            source: Source::PackagedTask,
+            location: t.location,
+            command: t.exe.as_ref().map_or_else(|| t.family.clone(), |p| p.display().to_string()),
+            publisher: ctx.publisher(t.exe.as_deref()),
+            path: t.exe.map(|p| p.display().to_string()),
+            enabled: t.enabled,
+            can_toggle: false,
+            disabled_at_ms: None,
+            note: Some(format!("App Store · gói {} · tắt/bật trong Settings → Apps → Startup", t.family)),
+        })
+        .collect()
 }
 
 fn read_approved(root: &Key, path: Option<&str>) -> HashMap<String, Vec<u8>> {
@@ -271,7 +308,7 @@ fn read_folder(ctx: &Ctx, com: &ComGuard, source: Source) -> Vec<StartupEntry> {
             let state = approved::parse(approved.get(&name.to_lowercase()).map(Vec::as_slice));
             Some(StartupEntry {
                 id: format!("{source:?}:{name}"),
-                name: name.trim_end_matches(".lnk").trim_end_matches(".LNK").to_owned(),
+                name: strip_lnk(&name).to_owned(),
                 source,
                 location: dir.display().to_string(),
                 command,
@@ -335,7 +372,12 @@ fn read_services(ctx: &Ctx) -> Vec<StartupEntry> {
                 .ok()
                 .map(|d| PathBuf::from(ctx.expand(&d)));
             let path = dll.or_else(|| ctx.exe(&command));
-            let display = key.get_string("DisplayName").ok().filter(|d| !d.starts_with('@')).unwrap_or_else(|| svc.clone());
+            // DisplayName dạng tài nguyên `@dll,-123` => giải ra tên thật (như services.msc); lỗi => tên key.
+            let display = key
+                .get_string("DisplayName")
+                .ok()
+                .and_then(|d| if d.starts_with('@') { crate::sys::shell::load_indirect_string(&d) } else { Some(d) })
+                .unwrap_or_else(|| svc.clone());
             let delayed = key.get_u32("DelayedAutostart").unwrap_or(0) == 1;
             Some(StartupEntry {
                 id: format!("Service:{svc}"),
@@ -393,15 +435,50 @@ fn set_enabled_inner(source: Source, name: &str, enabled: bool) -> AppResult<()>
 /// Ghi giá trị StartupApproved. `create` mở hoặc tạo subkey với quyền ghi
 /// (Task Manager cũng tạo key này khi tắt lần đầu).
 fn write_approved(root: &Key, approved_path: &str, name: &str, enabled: bool) -> AppResult<()> {
-    let key = root.create(approved_path)?;
-    key.set_bytes(name, Type::Bytes, &approved::encode(enabled, approved::now_filetime()))?;
+    let key = root.create(approved_path).map_err(access_error)?;
+    key.set_bytes(name, Type::Bytes, &approved::encode(enabled, approved::now_filetime())).map_err(access_error)?;
     Ok(())
+}
+
+/// ERROR_ACCESS_DENIED => `Forbidden` (UI nhận `code = "forbidden"` và hiện nút nâng quyền, không phải
+/// dò chữ trong thông báo của Windows — thông báo đó theo ngôn ngữ máy).
+fn access_error(e: windows::core::Error) -> AppError {
+    if e.code() == windows::core::HRESULT::from_win32(5) {
+        AppError::Forbidden("mục khởi động của máy (HKLM / mọi người dùng) cần quyền Administrator để bật/tắt".into())
+    } else {
+        e.into()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use windows_registry::CURRENT_USER;
+
+    #[test]
+    fn lnk_suffix_is_stripped_case_insensitively() {
+        assert_eq!(strip_lnk("Zalo.lnk"), "Zalo");
+        assert_eq!(strip_lnk("Zalo.Lnk"), "Zalo");
+        assert_eq!(strip_lnk("Zalo.LNK"), "Zalo");
+        assert_eq!(strip_lnk("run.bat"), "run.bat");
+        assert_eq!(strip_lnk("lnk"), "lnk");
+        assert_eq!(strip_lnk("Ảnh.lnk"), "Ảnh");
+    }
+
+    #[test]
+    fn service_resource_names_are_resolved() {
+        // Dịch vụ có sẵn trên mọi máy: DisplayName của Spooler dạng "@%SystemRoot%\system32\spoolsv.exe,-1".
+        let name = crate::sys::shell::load_indirect_string(r"@%SystemRoot%\system32\spoolsv.exe,-1");
+        assert!(name.is_some_and(|n| !n.starts_with('@')));
+    }
+
+    #[test]
+    fn access_denied_maps_to_forbidden() {
+        let denied = windows::core::Error::from(windows::core::HRESULT::from_win32(5));
+        assert_eq!(access_error(denied).code(), "forbidden");
+        let other = windows::core::Error::from(windows::core::HRESULT::from_win32(2));
+        assert_eq!(access_error(other).code(), "win32");
+    }
 
     /// Registry giả trong HKCU\Software\PcManagerTest-<pid>-<thread> — xoá cả cây khi drop.
     struct Sandbox(String);

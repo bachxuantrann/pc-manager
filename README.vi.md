@@ -14,7 +14,7 @@ file lớn và file trùng — bộ cài 2.5 MB, chạy ngầm chỉ tốn vài 
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#giấy-phép)
 ![Platform: Windows 10/11 x64](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078D4)
 
-[English](README.md) · **Tiếng Việt** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+[English](README.md) · **Tiếng Việt**
 
 </div>
 
@@ -128,7 +128,7 @@ Windows vốn quản lý bộ nhớ khá tốt, nên PC Manager không hứa "t�
 - **Boost sâu** xoá *toàn bộ* cache standby. RAM "trống" tăng mạnh nhưng **RAM khả dụng gần như
   không đổi** (cache standby vốn đã được tính là khả dụng), và app mở lần sau sẽ chậm hơn.
   Chỉ dùng khi có lý do cụ thể.
-- **Smart Boost** chỉ chạy khi RAM khả dụng xuống dưới ngưỡng (mặc định 15%).
+- **Smart Boost** chỉ chạy khi RAM khả dụng xuống dưới ngưỡng (mặc định 15%), dùng Boost nhẹ.
 - Mọi kết quả tách riêng **"RAM khả dụng tăng thêm"** (lợi ích thật) và **"cache đã xoá"**.
 - **Thu gọn bộ nhớ** chỉ áp dụng cho tiến trình bạn chọn, không làm hàng loạt.
 

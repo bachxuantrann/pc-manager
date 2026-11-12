@@ -28,6 +28,11 @@ pub enum BoostTrigger {
     Auto,
 }
 
+/// Chế độ của Smart Boost (bấm tay và tự động). Standby là cache Windows ĐÃ tính vào RAM khả dụng
+/// và nhường ngay khi app cần (xem `calc.rs`), nên xoá toàn bộ standby lúc RAM thấp không làm tăng RAM
+/// khả dụng mà chỉ mất cache (máy đọc đĩa nhiều hơn). Lợi ích thật đến từ flush modified => `Light`.
+pub const SMART_MODE: BoostMode = BoostMode::Light;
+
 /// Mức độ Boost.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -202,8 +207,7 @@ impl MemoryManager {
         }
     }
 
-    /// Chỉ Boost khi available < ngưỡng. Lúc đó RAM thực sự thiếu nên dùng
-    /// `Deep`: standby khi ấy vốn đã nhỏ, xoá hết để app đang cần có trang free ngay.
+    /// Chỉ Boost khi available < ngưỡng, và dùng `SMART_MODE` (Light) — xem giải thích ở hằng đó.
     pub fn smart_boost(
         &self,
         store: &Store,
@@ -217,7 +221,7 @@ impl MemoryManager {
                 threshold_pct: threshold.get(),
             });
         }
-        let report = self.boost(store, trigger, BoostMode::Deep)?;
+        let report = self.boost(store, trigger, SMART_MODE)?;
         Ok(SmartBoostOutcome::Boosted { report: Box::new(report) })
     }
 
@@ -277,6 +281,24 @@ mod tests {
     fn smart_boost_outcome_json_matches_frontend() {
         let v = serde_json::to_value(SmartBoostOutcome::Skipped { available_pct: 34.5, threshold_pct: 15 }).unwrap();
         assert_eq!(v, serde_json::json!({ "kind": "skipped", "availablePct": 34.5, "thresholdPct": 15 }));
+    }
+
+    #[test]
+    fn smart_boost_uses_light_mode() {
+        assert_eq!(SMART_MODE, BoostMode::Light);
+    }
+
+    /// Smart Boost thật (ngưỡng tối đa để chắc chắn chạy) — cần quyền Administrator.
+    #[test]
+    #[ignore = "cần quyền Administrator, thay đổi trạng thái RAM của máy"]
+    fn real_smart_boost_reports_light_mode() {
+        let mm = MemoryManager::init();
+        let store = Store::in_memory().unwrap();
+        let t = SmartThreshold::new(SmartThreshold::MAX).unwrap();
+        match mm.smart_boost(&store, t, BoostTrigger::Manual).unwrap() {
+            SmartBoostOutcome::Boosted { report } => assert_eq!(report.mode, BoostMode::Light),
+            SmartBoostOutcome::Skipped { available_pct, .. } => println!("bỏ qua: còn {available_pct:.0}% RAM"),
+        }
     }
 
     #[test]

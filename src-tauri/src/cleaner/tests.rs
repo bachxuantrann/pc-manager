@@ -18,7 +18,10 @@ struct Sandbox {
 
 impl Sandbox {
     fn new() -> Self {
-        let base = std::env::temp_dir().join(format!(
+        // %TEMP% của user đang đăng nhập: khi chạy test bằng tài khoản admin KHÁC, profile của tài khoản
+        // admin bị cấm dọn (đúng thiết kế) nên sandbox không được nằm ở đó.
+        let temp = crate::user::env("TEMP").map_or_else(std::env::temp_dir, PathBuf::from);
+        let base = temp.join(format!(
             "pcm-cleaner-test-{}-{}",
             std::process::id(),
             SEQ.fetch_add(1, Ordering::Relaxed)
@@ -208,6 +211,21 @@ fn dry_run_deletes_nothing_and_keeps_scan_for_real_clean() {
 }
 
 #[test]
+fn auto_clean_does_not_replace_users_preview() {
+    let sb = Sandbox::new();
+    make_file(&sb.root().join("a.tmp"), b"12345", 3 * DAY);
+    let m = manager(rule_for(&sb.root(), ""), BanList::from_env());
+    let store = Store::in_memory().unwrap();
+    let a = m.scan(&noop).unwrap();
+    let auto = m.auto_clean(&store, &["test".into()]).unwrap();
+    assert_eq!(auto.deleted_files, 1);
+    assert!(!sb.root().join("a.tmp").exists());
+    // Bản xem trước A của người dùng vẫn dùng được (file đã mất thì chỉ bỏ qua).
+    let rep = m.clean(&store, a.scan_id, &ready_ids(&a), false, &noop).unwrap();
+    assert_eq!(rep.deleted_files, 0);
+}
+
+#[test]
 fn scan_is_single_use_and_ids_are_checked() {
     let sb = Sandbox::new();
     make_file(&sb.root().join("a.tmp"), b"a", 3 * DAY);
@@ -307,7 +325,7 @@ fn every_embedded_rule_root_is_outside_ban_list() {
     let bans = BanList::from_env();
     for r in rules::embedded().unwrap() {
         for p in &r.paths {
-            for root in engine::expand_roots(p, &|k| std::env::var(k).ok()) {
+            for root in engine::expand_roots(p, &crate::user::env) {
                 let probe = root.join("probe.tmp");
                 assert!(bans.check(&probe).is_none(), "rule {} trỏ vào vùng cấm: {}", r.id, root.display());
             }

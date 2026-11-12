@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::error::AppResult;
 use crate::process::{ActionOutcome, ProcessOp, ProcessRef, ProcessSnapshot};
@@ -11,9 +11,7 @@ where
     T: Send + 'static,
     F: FnOnce(&AppState) -> AppResult<T> + Send + 'static,
 {
-    tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
-        .await
-        .map_err(|e| crate::error::task_failed("xử lý tiến trình", e))?
+    super::blocking(app, "xử lý tiến trình", f).await
 }
 
 #[tauri::command]

@@ -1,6 +1,6 @@
 [package]
 name = "pc-manager"
-version = "1.1.3"
+version = "1.2.0"
 description = "PC Manager — nhẹ, nhanh, an toàn"
 edition = "2021"
 rust-version = "1.85"
@@ -8,13 +8,16 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 name = "pc_manager_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Chỉ rlib: staticlib/cdylib chỉ cần cho mobile, mỗi loại thêm một lần LTO "fat" khi build release.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+# Tự cập nhật từ GitHub Release (giai đoạn 7, người dùng đồng ý 2026-11-12). Kiểm chữ ký minisign trước khi cài.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

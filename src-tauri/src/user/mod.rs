@@ -261,6 +261,10 @@ mod tests {
 
     #[test]
     fn same_user_uses_process_context() {
+        if is_other_user() {
+            println!("bỏ qua: test đang chạy bằng tài khoản admin khác user đang đăng nhập");
+            return;
+        }
         assert!(!is_other_user());
         assert_eq!(env("LOCALAPPDATA"), std::env::var("LOCALAPPDATA").ok());
         assert_eq!(hkcu_reg_root(), "HKCU");

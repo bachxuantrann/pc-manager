@@ -22,14 +22,25 @@ Thêm: mỗi giai đoạn một commit (chỉ commit khi người dùng yêu c�
 
 | Giai đoạn | Mục | Trạng thái |
 |---|---|---|
-| 1 — An toàn và chính xác | S1, S2, E1 | [ ] chưa làm |
-| 2 — Tác vụ dài: tiến độ và nối lại | P6, P7 | [ ] chưa làm |
-| 3 — Hiệu năng và thời gian build | P1, P2, P3, P4, P5, B1 | [ ] chưa làm |
-| 4 — Đồng bộ giao diện | U1, U2, U3, U4, U5 | [ ] chưa làm |
-| 5 — Bổ sung về chuyên môn Windows | E2, E3, E4, E5, E6 | [ ] chưa làm |
-| 6 — Dọn mã, tài liệu, skills | S3, B2, B3, T1, T2, T3, T4, T5 | [ ] chưa làm |
+| 1 — An toàn và chính xác | S1, S2, E1 | [x] xong (v1.2.0; E1 đã đo bằng test admin; chờ thử gỡ app per-user) |
+| 2 — Tác vụ dài: tiến độ và nối lại | P6, P7 | [x] xong (v1.2.0; chờ thử tay đóng/mở cửa sổ khi đang chuyển file vào Thùng rác) |
+| 3 — Hiệu năng và thời gian build | P1, P2, P3, P4, P5, B1 | [x] xong (P1 đo ở bản dev; P2 chưa đo CPU WebView2 trên app cài thật; B1: build release ~194 s → ~160 s) |
+| 4 — Đồng bộ giao diện | U1, U2, U3, U4, U5 | [x] xong (layout-check sạch 4 kích thước × 2 theme) |
+| 5 — Bổ sung về chuyên môn Windows | E2, E3, E4, E5, E6 | [x] xong (E5 không dùng WinRT: registry + manifest; chờ so tab Startup với Task Manager) |
+| 6 — Dọn mã, tài liệu, skills | S3, B2, B3, T1, T2, T3, T4, T5 | [x] xong (T2: máy này không có skill cấp người dùng; trên máy khác cần tự gỡ) |
+| 7 — Tự cập nhật | U6 | [x] xong v1.2.0 (khoá đã tạo; chờ thử cập nhật thật 1.2.0 → 1.2.1) |
 
-### Cần người dùng quyết định (hỏi khi tới giai đoạn đó, không tự chọn)
+### Quyết định của người dùng (2026-11-12)
+- **S3:** giữ 5.000 dòng `action_log` mới nhất; xoá `app_usage` có `last_seen` cũ hơn 1 năm.
+- **B3:** xoá chú thích `eslint-disable` thừa (không thêm ESLint).
+- **T5:** bỏ README tiếng Nhật và tiếng Trung; giữ tiếng Anh + tiếng Việt.
+- **E5:** làm và đo; được vượt 12 MB nếu chức năng đáng giá (báo số đo cho người dùng).
+- **T2:** agent tự tắt các skill cấp người dùng không dùng/trùng/lỗi thời theo bản rà soát.
+- **T4:** chuyển `PROMPTS.md` vào `docs/history/` và tạo `AGENTS.md` trỏ tới `CLAUDE.md`.
+- **E6:** sửa mô tả và bỏ tick mặc định (`default_selected = false`).
+- **E2:** chỉ dùng `form_factor == "DIMM"` (không đọc chassis SMBIOS).
+
+### Cần người dùng quyết định (câu hỏi gốc)
 - **S3:** giữ bao nhiêu dòng `action_log` (đề xuất 5.000); có xoá `app_usage` cũ hơn 1 năm không.
 - **B3:** (a) thêm ESLint + `eslint-plugin-react-hooks` vào CI (thêm devDependency) hay (b) xoá chú thích thừa.
 - **T5:** giữ hay bỏ README tiếng Nhật / tiếng Trung.
@@ -230,3 +241,20 @@ Thêm: mỗi giai đoạn một commit (chỉ commit khi người dùng yêu c�
 - File: README.md, README.vi.md, README.ja.md, README.zh-CN.md
 - Cần làm: Giữ tiếng Việt + tiếng Anh; hai bản còn lại bỏ hoặc ghi rõ “có thể chậm cập nhật”.
 - Xong khi: Theo quyết định của bạn.
+
+## Giai đoạn 7 — Tự cập nhật (yêu cầu mới 2026-11-12)
+
+### U6. Cập nhật lên bản mới nhất ngay trong app (cách A: plugin updater chính thức của Tauri)
+- Vấn đề: người dùng phải vào GitHub Release tải bộ cài bằng tay — bạn bè dùng app gần như không bao giờ cập nhật.
+- Quyết định của người dùng: dùng `tauri-plugin-updater` (thêm 1 thư viện — đã đồng ý). Không tự viết bộ tải/kiểm hash.
+- Cần làm:
+  - Backend: plugin updater, endpoint `latest.json` trên GitHub Release mới nhất; khoá công khai minisign nhúng trong
+    `tauri.conf.json`. Chỉ kiểm tra khi cửa sổ mở, tối đa 1 lần/ngày (lưu mốc trong SQLite); không luồng nền thường trực.
+  - UI: Cài đặt có công tắc "Tự kiểm tra cập nhật" (mặc định bật, nói rõ chỉ gửi yêu cầu tới GitHub) và nút
+    "Kiểm tra cập nhật". Có bản mới => thông báo kèm "Có gì mới"; chỉ cài khi người dùng bấm "Cập nhật" (UAC hỏi
+    vì cài vào Program Files). Ghi nhật ký `app.update` (AN TOÀN #7).
+  - CI (`release.yml`): build với `TAURI_SIGNING_PRIVATE_KEY`/`..._PASSWORD` từ secret, tải lên `.sig` và `latest.json`.
+    Thiếu secret => vẫn phát hành bộ cài như cũ nhưng không có `latest.json` (app báo "không kiểm tra được").
+  - Người dùng tự làm một lần: tạo cặp khoá (`npx tauri signer generate`), thêm 2 secret vào repo. Khoá riêng không vào repo.
+- Xong khi: từ bản N cài sẵn, phát hành bản N+1 => app thấy bản mới, bấm Cập nhật, UAC, cài xong mở lại đúng N+1;
+  `latest.json`/chữ ký sai => từ chối cài. RAM Rust lúc rảnh không tăng quá ngân sách (đo `admin-test.ps1 -Mode ram`).

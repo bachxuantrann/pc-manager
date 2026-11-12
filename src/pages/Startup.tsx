@@ -1,10 +1,13 @@
 import { INPUT, SURFACE, THEAD, pill } from "../components/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AdminNotice } from "../components/Elevation";
+import { AdminNotice, ElevateButton } from "../components/Elevation";
 import Button from "../components/Button";
 import { Notice } from "../components/Card";
+import { IconChevron, IconRefresh } from "../components/Icons";
+import PageShell from "../components/PageShell";
+import PublisherCell from "../components/PublisherCell";
 import { useWindowVisible } from "../hooks/useWindowVisible";
-import { api, errorMessage, type StartupEntry, type StartupSource } from "../lib/api";
+import { api, errorMessage, isApiError, type StartupEntry, type StartupSource } from "../lib/api";
 import { publisherText } from "../lib/processTable";
 
 const SOURCE_LABEL: Record<StartupSource, string> = {
@@ -19,6 +22,7 @@ const SOURCE_LABEL: Record<StartupSource, string> = {
   startupFolderCommon: "Thư mục Startup · mọi người dùng",
   scheduledTask: "Tác vụ theo lịch",
   service: "Dịch vụ",
+  packagedTask: "App Store (chỉ xem)",
 };
 
 type Tab = "apps" | "tasks" | "services";
@@ -53,7 +57,7 @@ function Toggle({ on, disabled, onChange }: { on: boolean; disabled?: boolean; o
 export default function Startup() {
   const [entries, setEntries] = useState<StartupEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string; needsAdmin?: boolean } | null>(null);
   const [tab, setTab] = useState<Tab>("apps");
   const [hideMs, setHideMs] = useState(true);
   const [query, setQuery] = useState("");
@@ -107,11 +111,8 @@ export default function Startup() {
       setMsg({ tone: "ok", text: `${enabled ? "Đã bật" : "Đã tắt"} ${e.name}. Có hiệu lực từ lần đăng nhập tới.` });
       load();
     } catch (err) {
-      const text = errorMessage(err);
-      const hint = /access is denied|truy cập bị từ chối|0x80070005/i.test(text)
-        ? " — mục của máy (HKLM / mọi người dùng) cần chạy PC Manager với quyền Administrator."
-        : "";
-      setMsg({ tone: "error", text: `${e.name}: ${text}${hint}` });
+      // Backend trả code "forbidden" khi thiếu quyền (không dò chữ — thông báo của Windows theo ngôn ngữ máy).
+      setMsg({ tone: "error", text: `${e.name}: ${errorMessage(err)}`, needsAdmin: isApiError(err) && err.code === "forbidden" });
     } finally {
       setBusy(null);
     }
@@ -149,17 +150,15 @@ export default function Startup() {
   const enabledApps = appEntries.filter((e) => e.enabled).length;
 
   return (
-    <section className="flex h-full w-full flex-col">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Khởi động</h1>
-          <p className="mt-1 text-sm opacity-60">
-            {entries
-              ? `${enabledApps} ứng dụng đang khởi động cùng Windows · ${appEntries.length - enabledApps} đã tắt`
-              : "Đang đọc registry, thư mục Startup và Task Scheduler…"}
-          </p>
-        </div>
-        {/* "Tải lại" nằm cạnh ô tìm kiếm (không ở hàng tab): chữ "(đang ẩn N)" dài/ngắn không đẩy nó xuống dòng. */}
+    <PageShell
+      title="Khởi động"
+      subtitle={
+        entries
+          ? `${enabledApps} ứng dụng đang khởi động cùng Windows · ${appEntries.length - enabledApps} đã tắt`
+          : "Đang đọc registry, thư mục Startup và Task Scheduler…"
+      }
+      actions={
+        // "Tải lại" nằm cạnh ô tìm kiếm (không ở hàng tab): chữ "(đang ẩn N)" dài/ngắn không đẩy nó xuống dòng.
         <div className="flex items-center gap-2">
           <input
             type="search"
@@ -169,12 +168,12 @@ export default function Startup() {
             className={`w-72 xl:w-96 ${INPUT}`}
           />
           <Button variant="ghost" size="sm" className="shrink-0" loading={reloading} onClick={reload}>
-            {!reloading && "↻ "}Tải lại
+            {!reloading && <IconRefresh />}Tải lại
           </Button>
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -199,7 +198,14 @@ export default function Startup() {
 
       {msg && (
         <div className="mt-2">
-          <Notice tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Notice>
+          <Notice tone={msg.tone} onClose={() => setMsg(null)}>
+            {msg.text}
+            {msg.needsAdmin && (
+              <span className="mt-2 block">
+                <ElevateButton />
+              </span>
+            )}
+          </Notice>
         </div>
       )}
       <div className="mt-2 empty:hidden">
@@ -218,7 +224,7 @@ export default function Startup() {
               <th className="px-3 py-2 font-medium opacity-70">Tên</th>
               <th className="w-56 px-3 py-2 font-medium opacity-70">Publisher</th>
               <th className="w-56 px-3 py-2 font-medium opacity-70">Nguồn</th>
-              <th className="w-28 px-3 py-2 font-medium opacity-70">Trạng thái</th>
+              <th className="w-52 px-3 py-2 font-medium opacity-70">Trạng thái</th>
             </tr>
           </thead>
           <tbody>
@@ -231,25 +237,13 @@ export default function Startup() {
                   className={`cursor-pointer border-t border-black/5 dark:border-white/5 ${expanded ? "bg-accent/10" : "hover:bg-black/5 dark:hover:bg-white/5"} ${e.enabled ? "" : "opacity-60"}`}
                 >
                   <td className="truncate py-2 pl-3 pr-2" title={e.name}>
-                    <span className="mr-1 inline-block w-3 opacity-50">{expanded ? "▾" : "▸"}</span>
+                    <span className="mr-1 inline-flex w-3 justify-center opacity-50">
+                      <IconChevron open={expanded} />
+                    </span>
                     {e.name}
                   </td>
                   <td className="truncate px-3">
-                    {e.publisher.status === "signed" && <span className="mr-1 text-green-600">✓</span>}
-                    <span
-                      title={e.publisher.status === "invalid" ? `Mã lỗi WinVerifyTrust ${e.publisher.code}` : undefined}
-                      className={
-                        e.publisher.status === "unsigned"
-                          ? "text-amber-600 dark:text-amber-400"
-                          : e.publisher.status === "invalid"
-                            ? "text-red-600 dark:text-red-400"
-                            : e.publisher.status === "signed"
-                              ? ""
-                              : "opacity-50"
-                      }
-                    >
-                      {publisherText(e.publisher) || (e.path ? "Không tìm thấy file" : "—")}
-                    </span>
+                    <PublisherCell p={e.publisher} empty={e.path ? "Không tìm thấy file" : "—"} />
                   </td>
                   <td className="truncate px-3 text-xs opacity-70">{SOURCE_LABEL[e.source]}</td>
                   <td className="px-3">
@@ -257,6 +251,22 @@ export default function Startup() {
                       <div className="flex items-center gap-2">
                         <Toggle on={e.enabled} disabled={busy !== null} onChange={(v) => toggle(e, v)} />
                         <span className="text-xs">{busy === e.id ? "…" : e.enabled ? "Bật" : "Tắt"}</span>
+                      </div>
+                    ) : e.source === "packagedTask" ? (
+                      // App Store: chỉ Windows (Task Manager) bật/tắt được — API StartupTask chạy trong chính app đó.
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs opacity-60">{e.enabled ? "Bật" : "Tắt"}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Mở tab Startup của Task Manager để bật/tắt app Store"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            api.startupOpenSettings().catch((err) => setMsg({ tone: "error", text: errorMessage(err) }));
+                          }}
+                        >
+                          Mở Task Manager
+                        </Button>
                       </div>
                     ) : (
                       <span className="text-xs opacity-60">{e.enabled ? "Bật" : "Tắt"} · chỉ xem</span>
@@ -301,6 +311,6 @@ export default function Startup() {
           </tbody>
         </table>
       </div>
-    </section>
+    </PageShell>
   );
 }

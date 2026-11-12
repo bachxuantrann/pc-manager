@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { PANEL } from "../components/ui";
+import { IconCheck, IconInfo, IconWarning } from "../components/Icons";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Button from "../components/Button";
 import { Card, Notice } from "../components/Card";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
@@ -29,11 +31,11 @@ const CATEGORY_LABEL: Record<DiagCategory, string> = {
   hardware: "Phần cứng",
 };
 
-const SEVERITY: Record<DiagSeverity, { label: string; badge: string; icon: string; rank: number }> = {
-  ok: { label: "Tốt", badge: "bg-green-500/15 text-green-700 dark:text-green-400", icon: "✓", rank: 0 },
-  info: { label: "Gợi ý", badge: "bg-sky-500/15 text-sky-700 dark:text-sky-300", icon: "ⓘ", rank: 1 },
-  warn: { label: "Cần chú ý", badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300", icon: "⚠", rank: 2 },
-  critical: { label: "Nên xử lý", badge: "bg-red-500/15 text-red-700 dark:text-red-400", icon: "⚠", rank: 3 },
+const SEVERITY: Record<DiagSeverity, { label: string; badge: string; icon: ReactNode; rank: number }> = {
+  ok: { label: "Tốt", badge: "bg-green-500/15 text-green-700 dark:text-green-400", icon: <IconCheck />, rank: 0 },
+  info: { label: "Gợi ý", badge: "bg-sky-500/15 text-sky-700 dark:text-sky-300", icon: <IconInfo />, rank: 1 },
+  warn: { label: "Cần chú ý", badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300", icon: <IconWarning />, rank: 2 },
+  critical: { label: "Nên xử lý", badge: "bg-red-500/15 text-red-700 dark:text-red-400", icon: <IconWarning />, rank: 3 },
 };
 
 function Badge({ s }: { s: DiagSeverity }) {
@@ -104,7 +106,6 @@ export default function Diagnosis() {
     if (started.current) return;
     started.current = true;
     void scan(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Cửa sổ bị đóng (xuống tray) lúc đang quét sâu rồi mở lại: hiện lại tiến độ / kết quả.
@@ -250,10 +251,10 @@ export default function Diagnosis() {
 
         <Card title={issues.length ? "Đề xuất" : "Đề xuất"}>
           {!report && !running && <p className="text-sm opacity-60">Bấm "Quét máy" để kiểm tra.</p>}
-          {report && issues.length === 0 && <p className="text-sm opacity-70">Không có gì cần xử lý. 🎉</p>}
+          {report && issues.length === 0 && <p className="text-sm opacity-70">Không có gì cần xử lý.</p>}
           <div className="grid gap-2">
             {issues.map((f) => (
-              <div key={`${f.id}-${f.title}`} className="flex gap-3 rounded-xl border border-black/5 p-3 dark:border-white/[0.06]">
+              <div key={`${f.id}-${f.title}`} className={`flex gap-3 p-3 ${PANEL}`}>
                 <span
                   className={`mt-0.5 w-4 shrink-0 text-center ${f.severity === "critical" ? "text-red-500" : f.severity === "warn" ? "text-amber-500" : "text-sky-500"}`}
                   aria-hidden

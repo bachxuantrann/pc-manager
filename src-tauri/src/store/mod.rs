@@ -2,7 +2,6 @@
 
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -30,6 +29,11 @@ CREATE TABLE IF NOT EXISTS app_usage (
 );
 ";
 
+/// Giữ bấy nhiêu dòng nhật ký mới nhất (quyết định của người dùng 2026-11-12).
+const KEEP_ACTIONS: i64 = 5_000;
+/// Xoá mẫu "lần dùng cuối" của exe không thấy chạy hơn 1 năm (vd. trình cài tên ngẫu nhiên trong Temp).
+const USAGE_MAX_AGE_MS: i64 = 365 * 24 * 3600 * 1000;
+
 /// Kết nối SQLite dùng chung. `Mutex` vì `rusqlite::Connection` không `Sync`.
 pub struct Store {
     conn: Mutex<Connection>,
@@ -48,6 +52,10 @@ impl Store {
     fn init(conn: Connection) -> AppResult<Self> {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
         conn.execute_batch(SCHEMA)?;
+        // Lỗi dọn bớt không được làm hỏng việc mở DB.
+        if let Err(e) = prune(&conn, crate::settings::now_ms()) {
+            eprintln!("[store] không dọn bớt được dữ liệu cũ: {e}");
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -61,7 +69,7 @@ impl Store {
     pub fn log_action(&self, action: &str, target: &str, ok: bool, detail: &str) -> AppResult<()> {
         self.conn()?.execute(
             "INSERT INTO action_log (ts, action, target, ok, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![now_ms(), action, target, ok, detail],
+            params![crate::settings::now_ms(), action, target, ok, detail],
         )?;
         Ok(())
     }
@@ -155,16 +163,52 @@ pub struct ActionLogEntry {
     pub detail: String,
 }
 
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
+
+/// Chính sách lưu giữ, chạy mỗi lần mở DB: giữ `KEEP_ACTIONS` dòng nhật ký mới nhất và bỏ mẫu
+/// `app_usage` cũ hơn `USAGE_MAX_AGE_MS` — DB không lớn dần mãi khi app chạy nền nhiều năm.
+fn prune(conn: &Connection, now_ms: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM action_log WHERE id <= (SELECT id FROM action_log ORDER BY id DESC LIMIT 1 OFFSET ?1)",
+        [KEEP_ACTIONS],
+    )?;
+    conn.execute("DELETE FROM app_usage WHERE last_seen < ?1", [now_ms.saturating_sub(USAGE_MAX_AGE_MS)])?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reopening_keeps_only_newest_actions_and_recent_usage() {
+        let path = std::env::temp_dir().join(format!("pcm-store-test-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let s = Store::open(&path).unwrap();
+            let conn = s.conn().unwrap();
+            let n = KEEP_ACTIONS + 100;
+            conn.execute(
+                "WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c WHERE i < ?1)
+                 INSERT INTO action_log (ts, action, target, ok, detail) SELECT i, 't', 'x', 1, '' FROM c",
+                [n],
+            )
+            .unwrap();
+            let now = crate::settings::now_ms();
+            conn.execute("INSERT INTO app_usage VALUES ('old.exe', 0, ?1)", [now - USAGE_MAX_AGE_MS - 1]).unwrap();
+            conn.execute("INSERT INTO app_usage VALUES ('new.exe', 0, ?1)", [now]).unwrap();
+        }
+        let s = Store::open(&path).unwrap();
+        let count: i64 = s.conn().unwrap().query_row("SELECT COUNT(*) FROM action_log", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, KEEP_ACTIONS);
+        let newest: i64 = s.conn().unwrap().query_row("SELECT MAX(ts) FROM action_log", [], |r| r.get(0)).unwrap();
+        assert_eq!(newest, KEEP_ACTIONS + 100, "giữ dòng mới nhất");
+        let usage: Vec<String> = s.usage().unwrap().into_iter().map(|(p, _)| p).collect();
+        assert_eq!(usage, ["new.exe"]);
+        drop(s);
+        for ext in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
+        }
+    }
 
     #[test]
     fn logs_are_returned_newest_first() {
