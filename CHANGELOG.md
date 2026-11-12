@@ -3,6 +3,12 @@
 Mỗi bản phát hành có một mục `## [x.y.z]`. CI lấy đúng mục của phiên bản được tag để làm phần
 "Có gì mới" trên trang Release (thiếu mục => không phát hành).
 
+## [1.2.1] - 2026-11-12
+
+### Thay đổi
+- Bản phát hành để kiểm tra chức năng tự cập nhật từ 1.2.0 (không đổi chức năng). Từ 1.2.0 trở đi, PC Manager tự báo khi
+  có bản mới; bấm "Cập nhật" trong Cài đặt để cài.
+
 ## [1.2.0] - 2026-11-12
 
 ### Mới
