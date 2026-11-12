@@ -122,7 +122,7 @@ const cleanerScan = {
     rule("edge-cache", "Cache Microsoft Edge", "Trình duyệt", "low", 318 * MB, 2210),
     rule("crash-dumps", "Bản ghi lỗi ứng dụng (crash dump)", "Bản ghi lỗi", "low", 640 * MB, 6),
     rule("wer-user", "Báo cáo lỗi Windows (của bạn)", "Bản ghi lỗi", "low", 58 * MB, 37),
-    rule("windows-update-cache", "Bản cập nhật Windows đã cài", "Windows Update", "medium", 2.31 * GB, 128, { usesService: true }),
+    rule("windows-update-cache", "Bản cập nhật Windows đã tải", "Windows Update", "medium", 2.31 * GB, 128, { usesService: true }),
     rule("recycle-bin", "Thùng rác", "Thùng rác", "high", 1.05 * GB, 64, { defaultSelected: false }),
   ],
 };
@@ -217,7 +217,7 @@ const drives = [
 let tick = 0;
 let diagRuns = 0;
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
-  app_info: () => ({ version: "1.0.0", isElevated: true, pid: 4321, startPage: page }),
+  app_info: () => ({ version: "1.2.1", isElevated: true, pid: 4321, startPage: page }),
   memory_status: () => memory(Math.round(58 + 6 * Math.sin(tick++ / 3))),
   memory_settings: () => ({ smartThresholdPct: 15, smartAuto: true }),
   process_list: () => processes,
@@ -230,13 +230,14 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   recent_actions: () => actions,
   jobs_snapshot: () => [],
   update_check: () => ({
-    current: "1.1.3",
-    available: { version: "1.2.0", notes: "### Bảo mật\n- Gỡ app cài riêng cho người dùng luôn chạy với quyền thường.\n\n### Thay đổi\n- Tác vụ dài có tiến độ và nối lại được.", dateMs: now - DAY },
+    current: "1.2.1",
+    // Mặc định không có bản mới (ảnh README); thêm `&update` vào URL để xem dải thông báo cập nhật.
+    available: !params.has("update") ? null : { version: "1.3.0", notes: "### Bảo mật\n- Gỡ app cài riêng cho người dùng luôn chạy với quyền thường.\n\n### Thay đổi\n- Tác vụ dài có tiến độ và nối lại được.", dateMs: now - DAY },
     auto: true,
     lastCheckMs: now - 60_000,
     configured: true,
   }),
-  update_set_auto: (args) => ({ current: "1.1.3", available: null, auto: !!args.enabled, lastCheckMs: now - 60_000, configured: true }),
+  update_set_auto: (args) => ({ current: "1.2.1", available: null, auto: !!args.enabled, lastCheckMs: now - 60_000, configured: true }),
   system_windows_old_info: () => ({ path: "C:\\Windows.old", exists: false, bytes: null }),
   diagnosis_run: () => {
     diagRuns++;

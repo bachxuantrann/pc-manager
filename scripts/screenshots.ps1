@@ -23,7 +23,7 @@ if (-not $edge) { throw "Không tìm thấy Microsoft Edge." }
 try { Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 5 | Out-Null } catch { throw "Server dev chưa chạy ở $Url (chạy: npm run dev)." }
 
 $profile = Join-Path ([IO.Path]::GetTempPath()) "pcm-screenshot-profile"
-$pages = "dashboard", "cleaner", "processes", "apps", "disk", "settings"
+$pages = "dashboard", "diagnosis", "system", "memory", "cleaner", "processes", "startup", "apps", "disk", "settings"
 foreach ($p in $pages) {
     $file = Join-Path $out "$p.png"
     $args = @(
